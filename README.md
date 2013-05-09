@@ -158,8 +158,10 @@
 <h3>sandbox.Promise({function}|{*}, {optional function canceler})</h3>
 <p>Алиас на <code>Core.Promise({function}|{*}, {optional function canceler})</code></p>
 
+
+
 <br>
-<h2 id="core">Core</h2>
+<h1 id="core">Core Reference</h1>
 
 
 <h3>Core.load({string URL}, {object Options})</h3>
@@ -200,6 +202,44 @@ Core.load('{baseUrl}/libs/jquery.js', {defer: true})
 <p>Такой приём может быть удобен, когда мы имеем значение но хотим использовать его в виде Promise-объекта, Например: если от функции ожидается, что она вернёт Promise-объект а не значение, можно просто это значение привести к этому типу.</p>
 <p>Т.о. наличие или отсутствие оператора <code>new</code> приводит к различным операциям. Не стоит путать вызов конструктора и приведение к типу.</p>
 
+<p>Контекст Promise объекта может быть изменён если обработчик добавленный через метод <code>.then({callback}, {errorrback}, {progressback})</code>. Если обработчик возвращает какое-то значение, то оно изменит контекст Promise объекта и следующие обработчики будут вызваны уже с новым контекстом. Если обработчик ничего не возвращает или возфращает <code>undefined</code>, то контекст не меняется.</p>
+<p>В контекст можно поместить любое значение, но если это значение будет другим Promise объектом, то это сильно меняет поведение текущего Promise объекта. Все обработчики, которые добавлены после обработчика, возвращающего Promise, выполнятся только полсле завершения этого нового Promise. Таким образом можно создать цепочку из асинхронных функций, которые будут выполнятся одна за другой. Примеры:</p>
+<pre><code>examplePromise.then(function(val){
+			//здесь val = undefined
+			return 1;
+		})
+		examplePromise.then(function(val){
+			//здесь val = 1
+			return;
+		})
+		examplePromise.then(function(val){
+			//здесь val = 1
+			return 2;
+		})
+		examplePromise.then(function(val){
+			//здесь val = 2
+		})
+</code></pre>
+<pre><code>var examplePromise = new Core.Promise(function(...){...}),
+	anotherPromise = new Core.Promise(function(...){...});
+	examplePromise.then(function(val){
+			//здесь val = undefined
+			return 1;
+		})
+		examplePromise.then(function(val){
+			//здесь val = 1
+			return anotherPromise;
+		})
+		examplePromise.then(function(val){
+			//этот обработчик и все последующие за ним выполнятся, только когда `anotherPromise` будет завершён успешно
+			//здесь val = undefined
+			return 2;
+		})
+		examplePromise.then(function(val){
+			//здесь val = 2
+		})
+</code></pre>
+
 <p>Выполнение Promise можно отменить с помощью метода <code>.cancel()</code>:</p>
 <pre><code>examplePromise.then(
 		function done(){}, 
@@ -227,8 +267,7 @@ Core.load('{baseUrl}/libs/jquery.js', {defer: true})
 	<li><code>.delay({Number miliseconds})</code> - добавляет искусственную задержку между выполнением обработчиков `callback` и `errorback`. Никак не влияет на обработчик `progressback`;</li>
 	<li><code>.and({Object Promise})</code> - после применения этого метода к объекту, он не может завершиться успешно раньше, чем будет успешно завершён переданный в аргументе `{Object Promise}`. Если `{Object Promise}` завершится с ошибкой, то и текущий Promise тоже завершится с этой же ошибкой.</li>
 </ul>
-<p></p>
-<p></p>
+
 
 <h3 id="core-every">Core.every({array|arguments Promises})</h3>
 <p>Возвращает Promise-объект который будет завершён, когда все переданные Promise-объекты будут завершены (не важно в каком порядке).</p>
