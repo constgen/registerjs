@@ -131,35 +131,41 @@ Core.every([promise1, promise2], promise3, [promise4, promise5])</code></pre>
 )</code></pre>
 
 
-
 <h3 id="core-any">Core.any({array|arguments Promises})</h3>
-<p>Похож на <code>Core.every()</code>, но с некоторыми отличифми. Он всё так же возвращает Promise-объект который будет завершён, когда все переданные Promise-объекты будут завершены. Но он завершается успешно при любых результатх завершения переданных в аргументах Promise объектов. В контекст будет передан массив всех контекстов в порядке, как они были указаны в аргументах. Но в данном случае массив контекстов может содержать как значения так и ошибки. Его удобно использовать, если нужно совершить несколько асинхронных действий, при том не важно как они завершатся, и по окончанию выполнить некий обработчик.</p>
-<p><code>Core.any()</code> не может быть завершён с ошибкой никогда за исключением единственного случая, когда он был отменён намеренно с помощью метода <code>.cancel()</code>, который есть у любого Promise объекта.</p>
+<p>
+  Like <code>Core.every()</code>, but with some differencies. It still returns Promise object that will be resolved when all passed in Promise objects will be resolved. But it will successfully resolve with any fulfillment results passed in arguments Promise objects. Context will be array of every context in specified order. But in this case context array may consist of values or errors. Better to use it when you need to make some of asynchronious actions and it doesn't matter wether they fulfill successfully or not and then execute handler.
+</p>
+<p>
+  <code>Core.any()</code> can not never will be resolved with error, except when it was cancelled using <code>.cancel()</code> method
+</p>
 
-<p>Для <code>Core.every()</code> и <code>Core.any()</code> метод <code>.cancel()</code> так же отменяет действия всех переданных в них Promise объектов.</p>
-
-
-
-
+<p>For <code>Core.every()</code> and <code>Core.any()</code> method <code>.cancel()</code> also cancel actions of all passed in Promise objects.</p>
 
 
 <h3 id="core-load">Core.load({string URL | array URLs}, {object Options})</h3>
-<p>Загружает в документ ресурсы. Поддерживаемые типы ресурсов: JavaScript, Image, CSS, Text Document. Тип распознаётся автоматически по расширению файла. Эта функция возвращает объект Promise, поэтому к нему можно применить соответственные методы <code>then()</code>, <code>cancel()</code> и др.</p>
-<p>{string URL} - строка с адресом, можно использовать переменные типа {***}.</p>
-<p>{array URLs} - первый параметр так же может быть массивом из URL. Это удобно для более быстрой записи вызова `Core.load()` для загрузки нескольких ресурсов.</p>
-<p>По умолчанию ресурс загружается синхронно и использовать его код можно сразу после вызова функции Core.load(). Это значит что всё синхронные загрузки исполняются строго в том порядке в котором их указали и одновременно загружаться может только 1 ресурс. Но большое количество синхронных запросов замедляют скорость загрузки. Поэтому поведение загрузки можно изменить на асинхронное.</p>
-<p>{object Options} - объект, свойства которого принимают значения <code>true</code> или <code>false</code>. Доступные свойства <code>defer</code>, <code>async</code>, <code>reload</code>. Значения по умолчанию у всех <code>false</code>. Если первый параметр {array URLs} - массив, то эти опции становятся общими для каждого ресурса в массиве.</p>
-<p>Options{defer: true} - загрузка ресурса не останавливает поток исполнения, а загружается в фоне. Такие файлы могут загружаться параллельно количесьвом больше одного и исполняются в том порядке, в котором их указали. Чтобы обработать окончание загрузки такого файла нужно использовать <code>.then()</code>.</p>
-<p>Options{async: true} - отменяет поведение defer. Такие файла всегда загружаются параллельно и исполняются сразу же как завершили свою загрузку. У них нет порядка исполнения. Такой метод стоит использовать для JavaScript которые не состоит в связи с другими файлами и время инициализации не приоритетно (например, валидация полей форм). Чтобы обработать окончание загрузки такого файла нужно использовать <code>.then()</code>.</p>
-<p>Options{reload: true} - По умолчанию загрузчик не будет загружать один и тот же ресурс несколько раз, а сразу завершит Promise, если URL был использован повторно. Но это поведение можно предотвратить использовав флаг <code>reload</code>. С ним ресурс всегда загружается заново.<p>
+<p>
+  Loads resources in document. Supported resource types: JavaScript, Image, CSS, Text Document. Type is automatically recognized by file extension. This function returns Promise object, so you can use corresponding methods <code>then()</code>, <code>cancel()</code> and others</p>
+<p>{string URL} - string, you can use a variable of type {***}.</p>
+<p>{array URLs} - first parameter can be array of URL`s. This is convenient for faster entry call `Core.load()` to load multiple resources</p>
+<p>By default resource loads in synchronously and it's code can be used right after Core.load() function call. It means that all synchronous loads are executed strict in specified order and it can only load single resource at the same time. But a lot of resources can slow download speed. That is why you can change behaviour to asynchronous</p>
+<p>
+  {object Options} - object, its properties get values <code>true</code> or <code>false</code>. Available properties <code>defer</code>, <code>async</code>, <code>reload</code>. All properties have values by default <code>false</code>. If first parameter {array URLs} is array, then these properties become common for every resource in array.
+</p>
+<p>
+  Options{defer: true} - resource load does not stop the flow of execution, and is loaded in the background. These files can be loaded in parallel of more than one and are executed in the order in which they are specified. To handle the load end of the file you need to use <code>.then()</code>.
+</p>
+<p>
+  Options{async: true} - prevents defer behaviour. These files are always loaded and executed in parallel at once both completed their loading. They do not have the order of execution.This method is used for JavaScript которые which is not a member in connection with other files and initialization time is not a priority (form validation for example). To handle the load end of the file you need to use <code>.then()</code>.
+</p>
+<p>
+  Options{reload: true} - By default, the loader will not load the same resource multiple times, but fulfill Promise, if URL was used again. But this behavior can be prevented using the flag <code>reload</code>. With this flag resource always reloads.<p>
 
-<p>Пример использования <code>Core.load</code>:</p>
+<p>Usage example <code>Core.load</code>:</p>
 <pre><code>Core.load('{baseUrl}/libs/jquery.js', {async: true})</code></pre>
 
-<p>{object Options} так же может быть строкой из флагов разделённых запятыми или пробелами. Наличие флага означает значение соответствующего свойства <code>true</code> , отсутствие - <code>false</code>. {defer: true, reload: true} будет выглядеть так "defer, reload" или "defer reload". Пример использования:</p>
-<pre><code>Core.load('{baseUrl}/libs/jquery.js', 'async, reload')</code></pre>
-
-<p>В большинстве случаев рекомендуется использовать {defer: true}. Пример:</p>
+<p>
+  {object Options} also can be string of flags separated by comma and spaces. Flag availability means value of the corresponding property <code>true</code> , absence - <code>false</code>. {defer: true, reload: true} will be like this "defer, reload" or "defer reload". Usage example:
+</p>
+    
+<p>In most cases use {defer: true}. Example:</p>
 <pre><code>Core.load('{baseUrl}/libs/jquery.js', 'defer')</code></pre>
-
-
