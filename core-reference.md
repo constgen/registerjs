@@ -2,13 +2,14 @@
 
 
 <h3>Core.Promise({function}|{*}, {optional function canceler})</h3>
-<P>Конструктор Promise-объектов. Такие объекты удобны для совершения асинхронных действий. После завершения такого действия (не важно как, успешно или с ошибкой) Promise-объект считается завершённым. Для создания нового объекта следует использовать оператор <code>new</code>. В качестве параметра передаётся функция, аргументы которой ссылаются на функции callback каждого из возможных событий. Т.о. можно предусмотреть все сценарии решения такого объекта. Пример:</p>
+<p>Constructor of Promise-objects. Such objects are a software abstraction that makes working with asynchronous operations much more pleasant. After end of the action (doesn`t matter if it failed or not) Promise-object considered fullfilled. To create new object you need to use operator <code>new</code>. You pass in function as a parameter, arguments of this function links to a callback function of each event. This may provide all scenarios fulfillment of such object.
+</p>
 
 <pre><code>var examplePromise = new Core.Promise(function(complete, error, progress){
- complete(val) - вызывается когда действие прошло успешно
-	error(val) - вызывается когда действие завершилось ошибкой
-	progress(val) - вызывается много раз в процессе исполнения до тех пор пока не вызовется complete() или error()
-	val - любое значение которое может быть переданно в callback
+ complete(val) - called when action is sucessfully completed
+	error(val) - called when a action fails
+	progress(val) - called many times during fulfillment process until it will be resolved with complete() or error()
+	val - any value that can be passed to callback function
 })</code></pre>
 
 <p>Обработчики добавляются к Promise с помощью метода <code>.then(callback, errorback, progressback)</code>:</p>
