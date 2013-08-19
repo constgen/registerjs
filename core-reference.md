@@ -12,97 +12,112 @@
 	val - any value that can be passed to callback function
 })</code></pre>
 
-<p>Обработчики добавляются к Promise с помощью метода <code>.then(callback, errorback, progressback)</code>:</p>
+<p>Handlers are added to Promise using method <code>.then(callback, errorback, progressback)</code>:</p>
 <pre><code>examplePromise.then(
 		function done(){}, 
 		function error(){}, 
 		function progress(){}
 	)</code></pre>
-<p>Можно добавить любое количество обработчиков в любое время как только Promise-объект был создан. Все они будут исполняться строго в том порядке в котором были добавлены и только 1 раз после завершения Promise-объекта. Если они добавляются после завершения Promise-объекта то будут выполнены немедленно, при чём контекст (значение которое передаётся обработчикам всех 3 типов) будет сохранено специально для таких вызовов, т.е. Promise-объекта запоминает своё последнее состояние.</p>
-<p>Если в конструктор передать не функцию, а любое другое значение, то такой Promise-объект не завершится никогда - не будет вызван ни один из обработчиков.</p>
-<pre><code>new Core.Promise('never resolved')</code></pre>
-<p>Core.Promise может быть так же использован и как функция для приведения к типу. Например:</p>
-<pre><code>Core.Promise(5)</code></pre>
-<p>Это выражение вернёт успешно разрешённый Promise-объект с сохранённым контекстом <code>5</code>. Т.е. к нему можно добавить обработчик успешного завершения, в который будет передано значение <code>5</code>.</p>
-<pre><code>Core.Promise(5).then(function(val){ здесь val равно 5 })</code></pre>
-<p>Такой приём может быть удобен, когда мы имеем значение но хотим использовать его в виде Promise-объекта, Например: если от функции ожидается, что она вернёт Promise-объект а не значение, можно просто это значение привести к этому типу.</p>
-<p>Т.о. наличие или отсутствие оператора <code>new</code> приводит к различным операциям. Не стоит путать вызов конструктора и приведение к типу.</p>
 
-<p>Контекст Promise объекта может быть изменён внутри обработчика, добавленного через метод <code>.then({callback}, {errorrback}, {progressback})</code>. Если обработчик возвращает какое-то значение, то оно изменит контекст Promise объекта и следующие обработчики будут вызваны уже с новым контекстом. Если обработчик ничего не возвращает или возфращает <code>undefined</code>, то контекст не меняется.</p>
-<p>В контекст можно поместить любое значение, но если это значение будет другим Promise объектом, то это сильно меняет поведение текущего Promise объекта. Все обработчики, которые добавлены после обработчика, возвращающего Promise, выполнятся только полсле завершения этого нового Promise. Таким образом можно создать цепочку из асинхронных функций, которые будут выполнятся одна за другой. Примеры:</p>
+<p>You may add any amount of handlers in any time after Promise-object was created. They will perform strictly in the order that they were added and only once after Promise fulfillment. A promise that is resolved with a value remembers the fulfillment. If a callback is attached in the future to this promise, it will be executed with the previously resolved value.  Promises behave the same way regardless of whether they are already resolved or resolved in the future.</p>
+
+<p>If there is no function in Promise constructor then it will never be fulfilled</p>
+<pre><code>new Core.Promise('never resolved')</code></pre>
+<p>Core.Promise can be used to wrap some value. For example:</p>
+<pre><code>Core.Promise(5)</code></pre>
+<p>This expressin returns resolved Promise-object with context <code>5</code>. It means you can add handler for fulfillment or rejection with value <code>5</code></p>
+<pre><code>Core.Promise(5).then(function(val){ val equal 5 })</code></pre>
+
+<p>This technique can be useful when we have value, but want them to use as a Promise-object, for example: if expected that function returns Promise, then we just wrap it with Promise-object.</p>
+<p>Presence of operator <code>new</code> leads to different operations. Make differrence on constructor call and wrapping</p>
+
+<p>Promise-object context can be changed within handler that was called with method <code>.then({callback}, {errorrback}, {progressback})</code>. If handler returns some value, then it will replace context of Promise object and next handlers will be called with new context. If handler doesn't return anything or returns <code>undefined</code> then context doesn't change.</p>
+<p>Context can be any value, but if this value will be another Promise object, it will affect behaviour of existing Promise object. All handlers that assigned after handler will execute only after new Promise fulfillment. This way you can create asynchronious functions chain. For example:</p>
+
 <pre><code>examplePromise.then(function(val){
-	//здесь val = undefined
+	//val = undefined
 	return 1;
 })
 examplePromise.then(function(val){
-	//здесь val = 1
+	//val = 1
 	return;
 })
 examplePromise.then(function(val){
-	//здесь val = 1
+	//val = 1
 	return 2;
 })
 examplePromise.then(function(val){
-	//здесь val = 2
+	//val = 2
 })
 </code></pre>
-<pre><code>var examplePromise = new Core.Promise(function(...){...}),
-	anotherPromise = new Core.Promise(function(...){...});
-examplePromise.then(function(val){
-	//здесь val = undefined
-	return 1;
-})
-examplePromise.then(function(val){
-	//здесь val = 1
-	return anotherPromise;
-})
-examplePromise.then(function(val){
-	//этот обработчик и все последующие за ним выполнятся, только когда `anotherPromise` будет завершён успешно
-	//здесь val = undefined
-	return 2;
-})
-examplePromise.then(function(val){
-	//здесь val = 2
-})
+<pre><code>
+  var examplePromise = new Core.Promise(function(...){...}),
+  anotherPromise = new Core.Promise(function(...){...});
+  examplePromise.then(function(val){
+  //val = undefined
+  return 1;
+  })
+  examplePromise.then(function(val){
+  //val = 1
+  return anotherPromise;
+  })
+  examplePromise.then(function(val){
+  //this handler and all next handlers will be executed only after `anotherPromise` will successfully fulfilled
+  //val = undefined
+  return 2;
+  })
+  examplePromise.then(function(val){
+  //val = 2
+  })
 </code></pre>
 
-<p>Выполнение Promise можно отменить с помощью метода <code>.cancel()</code>:</p>
+<p>You may cancel Promise execution using <code>.cancel()</code> method:</p>
 <pre><code>examplePromise.then(
 	function done(){}, 
 	function error(err){console.error(err.message)}, 
 	function progress(){}
 )
 examplePromise.cancel()
-//в консоли появится - Error: Canceled
+//console message - Error: Canceled
 	</code></pre>
-<p>Promise объект завершается с ошибкой связанной с отменой ('Canceled'). Такой объект уже не сможет завершиться успешно. Но если на момент отмены он уже был завершён с любым статусом, то эта отмена игнорируется:</p>
-<pre><code>examplePromise = Core.Promise(5) //завершённый успешно 
+<p>If a promise is cancelled then such object can not fulfill successfully. If at the moment of cancelling it was already fullfilled with any status then this cancellation is ignored.</p>
+<pre><code>examplePromise = Core.Promise(5) //fulfilled successfully 
 examplePromise.then(
 	null, 
 	function error(err){console.error(err.message)}
 )
 examplePromise.cancel()
-//в консоли ничего не появится</code></pre>
-<p>Метод <code>.cancel()</code> может менять не только статус объекта но и останавливать все действия, которые выполняются для завершения. Например, если функция Promise совершает асинхронный запрос на сервер то при её отмене, кроме перехода Promise объекта в завершённое состояние с ошибкой, так же будет отменён сам запрос на сервер, который не завршился, для экономии трафика и особождения канала браузера. Все действия по остановке деятельности асинхронных функций должны быть предусмотрены в момент создания Promise объекта с помощью конструктора <code>new Core.Promise({function}, {optional function canceler})</code>. `{optional function canceler}` - это функция, которая будет вызвана при отмене Promise объекта. В примере с запросом на сервер, в тело этой функции нужно поместить код для оставновки такого запроса, т.к. ответ от сервера уже будет не актуален и лучше освободить ресурсы браузера для более важных задач.</p>
-<p>Так же у Promise объекта имеется множество других вспомогательных методов:</p>
+//nothing in console</code></pre>
+<p>Method <code>.cancel()</code> can change not only status of your Promise object, but stop all actions that are performed until fulfillment. For example if Promise function makes asynchronious request, when it is cancelled Promise object changes it state in fullfilled with error also it prevents request itself for perfomance and efficiency. All actions for stopping asynchronious functions must be provided while creating new Promise object using constructor <code>new Core.Promise({function}, {optional function canceler})</code>. `{optional function canceler}` - this function will be called when Promise is cancelled. For example this function may stop async request, as server response will be no longer actual it will be better to free browser resources for more important tasks</p>
+
+<p>Promise object has many other auxiliary methods</p>
 <ul>
-	<li><code>.timeout({Number miliseconds})</code> - создаётся таймер по окончанию которого Promise будет отменён, если он не успел завершиться;</li>
-	<li><code>.wait({Number miliseconds})</code> - создаётся таймер по окончанию которого Promise будет принудительно завершён успешно без контекста, если он не успел завершиться;</li>
-	<li><code>.interval({Number miliseconds})</code> - вызывает callback прогресса через заданный интервал без контекстадо тех пор пока Promise не будет завершён;</li>
-	<li><code>.delay({Number miliseconds})</code> - добавляет искусственную задержку между выполнением обработчиков `callback` и `errorback`. Никак не влияет на обработчик `progressback`;</li>
-	<li><code>.and({Object Promise})</code> - после применения этого метода к объекту, он не может завершиться успешно раньше, чем будет успешно завершён переданный в аргументе `{Object Promise}`. Если `{Object Promise}` завершится с ошибкой, то и текущий Promise тоже завершится с этой же ошибкой.</li>
+  <li>
+    <code>.timeout({Number miliseconds})</code> - create delay before cancelling Promise if it did not finish earlier;
+  </li>
+  <li>
+    <code>.wait({Number miliseconds})</code> - create delay before Promise object will be forced to successfully fulfill without context if it did not finish earlier;
+  </li>
+  <li>
+    <code>.interval({Number miliseconds})</code> - call proggress callback with interval without context until Promise will be fulfilled;
+  </li>
+  <li>
+    <code>.delay({Number miliseconds})</code> - add delay between handler `callback` and `errorback` execution. Doesn't affect `progressback` handler;
+  </li>
+  <li>
+    <code>.and({Object Promise})</code> - applies that current Promise can not be completed successfully before will be completed successfully passed in the argument `{Object Promise}`. If `{Object Promise}` resolved with error then current Promise will resolve with same error.
+  </li>
 </ul>
 
-
 <h3 id="core-every">Core.every({array|arguments Promises})</h3>
-<p>Возвращает Promise-объект который будет завершён, когда все переданные Promise-объекты будут завершены (не важно в каком порядке).</p>
-<p>Завершается успешно если все Promise-объекты завершились успешно. Тогда в контекст будет передан массив всех контекстов в порядке как они были указаны в аргументах.<br>
-Завершается с ошибкой если какой-то из Promise-объектов завершился неудачно. Тогда в контекст будет передан контекст ошибки Promise-объекта из списка, который первым завершился с ошибкой.</p>
-<p>В качестве аргументов может принимать как массив, так и множество аргументов через запятую, так и множество масиввов, через запятую, так и в перемешку массивы с одиночными аргументами через запятую - все они будут объеденены в том порядке в котором были указаны:</p>
+<p>Returns Promise-object which will be resolved when all passed in Promise objects will be resolved (order doesn't matter)</p>
+<p>Fulfills successfully if all Promise objects successfully fulfilled. Context will have array of all contexts in order that they were specified in arguments<br>
+Fulfilles with an error if at least one of Promises Fulfilled with an error. Context will have context with error of first Promise that fulfilled with an error.</p>
+<p>As arguments can be passed in array, many arguments separated with comma, many arrays, arrays mixed with arguments, they all will be combined in specified order:</p>
 <pre><code>Core.every(promise1, promise2, promise3)
 Core.every([promise1, promise2, promise3])
 Core.every([promise1, promise2], promise3, [promise4, promise5])</code></pre>
-Так же <code>Core.every()</code> автоматически приводит к нужнуму типу все входящие аргументами, если они не являются Promise. А если аргумент - это функция, она немедленно исполняется и в контекст созданного вместо неё Promise помещается значение которое вернула эта функция:
+<p>Also <code>Core.every()</code> automatically creates promise wrap if argument isn't Promise object. If argument is a function it immediately executes and context of Promise fills with function result:</p>
 <pre><code>Core.every([promise1, promise2], 5, ['resolved value', function(){ return 1}]).then(
 	function success(val){
 		conole.log(
@@ -114,6 +129,7 @@ Core.every([promise1, promise2], promise3, [promise4, promise5])</code></pre>
 		)
 	}
 )</code></pre>
+
 
 
 <h3 id="core-any">Core.any({array|arguments Promises})</h3>
