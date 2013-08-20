@@ -87,7 +87,7 @@ If module equals <code>0</code>, <code>false</code>, <code>null</code> or <code>
 <code>root</code> - root HTML element. If none are found then the module will not be registered.<br>
 <code>module</code> - reference to module itself. Used to access module methods in any part of its code.<br>
 <code>myMethod</code>, <code>myProp</code> - your own properties and methods. 
-They always have access to any part of module as they have <code>module</code> reference, and they can access <code>sandbox</code> object.
+They always have access to any part of module as they have <code>module</code> reference, and they can access to the <code>sandbox</code> object.
 </p>
 
 <br>
