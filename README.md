@@ -55,7 +55,7 @@
 </p>
 
 <p>
-If module returns value <code>0</code>, <code>false</code>, <code>null</code> or <code>undefined</code> then nothing will be registered
+If module equals <code>0</code>, <code>false</code>, <code>null</code> or <code>undefined</code> then nothing will be registered
 </p>
 
 <p>
