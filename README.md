@@ -2,15 +2,15 @@
 
 <h2>Module</h2>
 <p>
-Модуль в предложеной струтуре - это JavaScript объект, который работает обособленно от всей системы, а для связи с приложением использует <code>sandbox</code>. Для того чтобы его использовать, его всегда нужно сперва зарегистрировать. Любой модуль должен иметь уникальное имя в системе и содержать обязательный метод <code>init</code>. Пример:
+  In proposed structure Module is JavaScript object that operates separately from the whole system and as a connection with application uses <code>sandbox</code>. In order to use it you need register it. Any module must have unique name in system and must contain method <code>init</code>. Example:
 </p>
 <pre><code>Core.register('firstModule', {
 	init: function(){
 		//module started his life
 	}
 })</code></pre>
-<p>Так же у модуля могут быть не обязательные свойства и методы, такие как <code>listen</code> и <code>destroy</code>.</p>
-<p><code>init</code>, <code>destroy</code>, <code>listen</code> - это зарегистрированые структурой имена свойств.</p>
+<p>Also module has optional properties and methods such as <code>listen</code> and <code>destroy</code>.</p>
+<p><code>init</code>, <code>destroy</code>, <code>listen</code> are property names that are registered by structure.</p>
 <pre><code>Core.register('secondModule', {
 	init: function(){
 		//start module's life: attach bindings, show content, etc.
@@ -27,7 +27,7 @@
 	}
 })</code></pre>
 <p>
-Это был упрощённый способ регистрации модуля. Более развёрнутый метод предпологает наличие <code>sandbox</code> объекта, поэтому вместо объекта используется функция которая исполняется немедленно и возвращает объект модуля.
+  It was simplified method to register module. Extended method requires <code>sandbox</code> object, so object is used instead of function that executed immediately and returns an object module.
 </p>
 <pre><code>Core.register('thirdModule', function(sandbox){
 	return {
@@ -51,15 +51,15 @@
 	}
 })</code></pre>
 <p>
-<code>sandbox</code> - объект к которому модуль может обращаться для получения доступа к функциям приложения. Его описание будет ниже.
+<code>sandbox</code> - module can refer this object to gain access to application functions.
 </p>
 
 <p>
-Если модуль будет иметь значение <code>0</code>, <code>false</code>, <code>null</code> или <code>undefined</code> то ничего не зарегистрируется под указанным именем.
+If module returns value <code>0</code>, <code>false</code>, <code>null</code> or <code>undefined</code> then nothing will be registered
 </p>
 
 <p>
-На практике модуль используется в связке с фрагментом HTML, который он обслуживает. Ниже приведён пример рекомендумого способа регистрации модуля.
+  In most cases module is used with HTML fragment, which it serves. The following example shows the recommended method of module registration.
 </p>
 <pre><code>Core.register('thirdModule', function(sandbox){
 	return (function (root) {
@@ -84,9 +84,10 @@
 	}(document.querySelector('.moduleElement'))) // root HTML element
 })</code></pre>
 <p>
-<code>root</code> - корневой HTML-элемент. Если элемент не найден то модуль не регистрируется.<br>
-<code>module</code> - cсылка на объект самого модуля. Используется для доступа к методам модуля в любой части его кода.<br>
-<code>myMethod</code>, <code>myProp</code> - ваши личные свойства и методы. Они всегда могут получить доступ к любой части модуля т.к. им доступна ссылка <code>module</code>, и как уже сказано ранее им доступен объект <code>sandbox</code>.
+<code>root</code> - root HTML element. If none are found then the module will not be registered.<br>
+<code>module</code> - reference to module itself. Used to access module methods in any part of its code.<br>
+<code>myMethod</code>, <code>myProp</code> - your own properties and methods. 
+They always have access to any part of module as they have <code>module</code> reference, and they can access <code>sandbox</code> object.
 </p>
 
 <br>
@@ -98,9 +99,9 @@
 
 
 <h3>sandbox.hasFeature({string})</h3>
-<p>Возвращает <code>true</code> или <code>false</code> состояние поддержки браузером указанной технологии. Если поддержка не может быть проверена то возвращает <code>false</code>. Названия характеристик делятся на 3 группы: JavaScript, CSS, HTML. Соответственно их записи начинаются с префиксов 'js-', 'css-', 'element-'. Так же имеются общие характеристики, которые не относятся к группам, они записываются без префиксов.</p>
-<p>
-Список стандартных характеристик, которые доступны всегда:<br>
+<p>Returns <code>true</code> or <code>false</code> state of browser support this technology. If support cannot be checked then it returns <code>false</code>. Feature names are divided in 3 groups: JavaScript, CSS, HTML. Their names start with prefixes 'js-', 'css-', 'element-'. Also there are common features, they don't have prefixes.</p>
+
+List of feature detections that are always available:<br>
 <code>'css-transform3d'</code><br>
 <code>'css-transform'</code><br>
 <code>'css-transition'</code><br>
@@ -117,31 +118,35 @@
 <code>'cordova'</code><br>
 </p>
 <p>
-Остальные доступны только при подключении расширения 'features.core.js'.<br>
+Other feature detections will be available when 'features.core.js' extension included.<br>
 <code>'element-canvas'</code><br>
 <code>'element-input[type=range]'</code><br>
 <code>'js-webStorage'</code><br>
-(Здесь список будет пополняться в дальнейшем)
+(This list will be updated in the future)
 </p>
 
 <h3>sandbox.template({string})</h3>
-<p>Преобразует любую строку с переменными вида {variable} в строку со значениями этих переменных. Переменные используются для абстрагирования от окружения в котором исполняется приложение. Пример:</p>
+<p>Converts any string of variables like {variable} to string with values of these variables. The variables are used to abstract from the application environment. Example:</p>
 <code>sandbox.template('{baseUrl}/plugins/lightbox.js') // -> http://github.com/plugins/lightbox.js</code>
 <p>
-Доступные переменные:
-<code>{baseUrl}</code> - адрес к корневой папке приложения<br>
-??????????????????????
+Available variables:
+<code>{baseUrl}</code> - address of the application's root directory<br>
 </p>
 
 
 <h3>sandbox.alert({string Message}, {object Options})</h3>
-<p>Универсальная функция для всех платформ. Аналог <code>alert()</code> из браузера. Возвращает Promise object (т.к. может быть асинхронным), который успешно завершается со значением <code>true</code> при нажатии на кнопку OK.</p>
+<p>
+  Common function for every platform. Similar to browser's <code>alert()</code>. Returns Promise object (it can be asynchronious), will be successfully fulfilled with <code>true</code> if 'OK' button was clicked.
+</p>
 
 <h3>sandbox.confirm({string Message}, {object Options})</h3>
-<p>Универсальная функция для всех платформ. Аналог <code>confirm()</code> из браузера. Возвращает Promise object (т.к. может быть асинхронным), который успешно завершается со значением <code>true</code> при нажатии на кнопку OK или со значением <code>false</code> при нажатии на кнопку CANCEL.</p>
+<p>
+  Common function for every platform. Similar to browser's <code>confirm()</code>. Returns Promise object (it can be asynchronious), will be successfully fulfilled with <code>true</code> if 'OK' button was clicked, 
+  or with value <code>false</code> if 'CANCEL' button was prressed</p>
 
 <h3>sandbox.notification({string Message}, {object Options})</h3>
-<p>Универсальная функция для всех платформ. Аналог <code>window.webkitNotifications</code> из браузера. Возвращает Promise object, который успешно завершается со значением <code>true</code> при нажатии на всплывающее сообщение или со значением <code>false</code> при нажатии на кнопку закрытия сообщения.</p>
+<p>
+  Common function for every platform. Similar to browser's <code>window.webkitNotifications</code>. Returns Promise object (it can be asynchronious), will be successfully fulfilled with <code>true</code> if pop-up message was clicked, or <code>false</code> if close button on pop-up message was clicked.</p>
 
 
 <h3>sandbox.data({*}).format({string})</h3>
@@ -153,10 +158,10 @@
 <h3>sandbox.Event</h3>
 
 <h3>sandbox.load({string URL}, {object Options})</h3>
-<p>Алиас на <code>Core.load({string URL}, {object Options})</code></p>
+<p>Alias for <code>Core.load({string URL}, {object Options})</code></p>
 
 <h3>sandbox.Promise({function}|{*}, {optional function canceler})</h3>
-<p>Алиас на <code>Core.Promise({function}|{*}, {optional function canceler})</code></p>
+<p>Alias for <code>Core.Promise({function}|{*}, {optional function canceler})</code></p>
 
 
 
