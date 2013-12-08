@@ -1,4 +1,4 @@
-<h1 id="core">Core Reference</h1>
+﻿<h1 id="core">Core Reference</h1>
 
 
 <h3>Core.Promise({function}|{*}, {optional function canceler})</h3>
