@@ -1,6 +1,6 @@
-﻿<h1 id="sandbox">Module Sandbox Reference</h1>
+﻿<h1>Module Sandbox Reference</h1>
 
-<h2>Module</h2>
+<h2 id="module">Module</h2>
 <p>
 Модуль в предложеной струтуре - это JavaScript объект, который работает обособленно от всей системы, а для связи с приложением использует <code>sandbox</code>. Для того чтобы его использовать, его всегда нужно сперва зарегистрировать. Любой модуль должен иметь уникальное имя в системе и содержать обязательный метод <code>init</code>. Пример:
 </p>
@@ -132,25 +132,6 @@
 <code>{baseUrl}</code> - адрес к корневой папке приложения<br>
 ??????????????????????
 </p>
-
-
-<h3>sandbox.alert({string Message}, {object Options})</h3>
-<p>Универсальная функция для всех платформ. Аналог <code>alert()</code> из браузера. Возвращает Promise object (т.к. может быть асинхронным), который успешно завершается со значением <code>true</code> при нажатии на кнопку OK.</p>
-
-<h3>sandbox.confirm({string Message}, {object Options})</h3>
-<p>Универсальная функция для всех платформ. Аналог <code>confirm()</code> из браузера. Возвращает Promise object (т.к. может быть асинхронным), который успешно завершается со значением <code>true</code> при нажатии на кнопку OK или со значением <code>false</code> при нажатии на кнопку CANCEL.</p>
-
-<h3>sandbox.notification({string Message}, {object Options})</h3>
-<p>Универсальная функция для всех платформ. Аналог <code>window.webkitNotifications</code> из браузера. Возвращает Promise object, который успешно завершается со значением <code>true</code> при нажатии на всплывающее сообщение или со значением <code>false</code> при нажатии на кнопку закрытия сообщения.</p>
-
-
-<h3>sandbox.data({*}).format({string})</h3>
-
-<h3>sandbox.data({*}).filter({string})</h3>
-
-<h3>sandbox.data({*}).sort({string})</h3>
-
-<h3>sandbox.Event</h3>
 
 <h3>sandbox.load({string URL}, {object Options})</h3>
 <p>Алиас на <code>Core.load({string URL}, {object Options})</code></p>
