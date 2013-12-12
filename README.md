@@ -1,9 +1,17 @@
-﻿<h2>
-	<a href="core-reference.md#core">Core Reference</a>
-</h2>
-<h2>
-	<a href="module-reference.md#module">Module Reference</a>
-</h2>
-<h2>
-	<a href="module-reference.md#sandbox">Sandbox Reference</a>
-</h2>
+﻿<ul>
+	<li>
+		<a href="wiki/Intro">Intro</a>
+	</li>
+	<li>
+		<a href="wiki/Core-Reference">Core Reference</a>
+	</li>
+	<li>
+		<a href="wiki/Sandbox-Reference">Sandbox Reference</a>
+	</li>
+	<li>
+		<a href="wiki/Module-Reference">Module Reference</a>
+	</li>
+	<li>
+		<a href="wiki/Outro">Outro</a>
+	</li>
+</ul>
