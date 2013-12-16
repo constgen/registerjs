@@ -1,5 +1,5 @@
 ﻿/*
-Version 3.3.3
+Version 3.3.5
 
 Compatable with: 
 	- NodeJS
@@ -24,28 +24,31 @@ IO:
 		window = browserWindow || {},
 		document = window.document,
 		location = window.location,
-		noop = function(){},
 
 		/*internal*/
-		Core = {version: '3.3.3'}, // Application Core
+		Core = {version: '3.3.5'}, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
 		Resources = {},// Resource manager
 		Includes = [],// Included modules collection
-		CoreListeners = {}, //Collection of Core event handlers (for Core.invoke())
+		Events = {}, //Collection of Core events handlers
+		Actions = {}, //Collection of sandboxes actions handlers
 		TemplateRules = [], //common templating rules
 		SandboxTemplateRules = [], //module templating rules
 		lastRegisteredModuleName = '',
+		requestAnimationFrame,
+		cancelAnimationFrame,
 
 		/*shortcuts*/
+		noop = function() { },
 		setTimeout_1 = function(func) { return setTimeout(func, 1) },
 		setTimeout_10 = function(func) { return setTimeout(func, 10) },
 		setInterval_15 = function(func) { return setInterval(func, 15) };
 	
 
 
-	/*Fixes, polyfills*/
+										/*Fixes, polyfills*/
 	
 	//NodeJS polyfill
 	if (nodeGlobal) {
@@ -63,29 +66,28 @@ IO:
 	
 	// compressed with http://www.refresh-sf.com/yui/
 	// Array forEach
-	[].forEach || (Array.prototype.forEach = function(g, b) { var d, c, e; if (this == null) { throw new TypeError("this is null or not defined") } var f = Object(this), a = f.length >>> 0; if ({}.toString.call(g) != "[object Function]") { throw new TypeError(g + " is not a function") } if (b) { d = b } c = 0; while (c < a) { if (c in f) { e = f[c]; g.call(d, e, c, f) } c++ } });
+	[].forEach || (Array.prototype.forEach = function(g, b) { if (this == null) { throw new TypeError("this is null or not defined") } var d, c, e, f = Object(this), a = f.length >>> 0; if ({}.toString.call(g) != "[object Function]") { throw new TypeError(g + " is not a function") } if (b) { d = b } c = 0; while (c < a) { if (c in f) { e = f[c]; g.call(d, e, c, f) } c++ } });
 	// Array map
 	[].map || (Array.prototype.map = function(i, h) { if (this == null) { throw new TypeError("this is null or not defined") } if ({}.toString.call(i) != "[object Function]") { throw new TypeError(i + " is not a function") } var b, a, c, d, g, f = Object(this), e = f.length >>> 0; h && (b = h); a = new Array(e); c = 0; while (c < e) { if (c in f) { d = f[c]; g = i.call(b, d, c, f); a[c] = g } c++ } return a });
 	// Array filter
-	[].filter || (Array.prototype.filter = function(b) { if (this == null) { throw new TypeError("this is null or not defined") } var f = Object(this); var a = f.length >>> 0; if (typeof b != "function") { throw new TypeError(b + " is not a function") } var e = []; var d = arguments[1]; for (var c = 0; c < a; c++) { if (c in f) { var g = f[c]; if (b.call(d, g, c, f)) { e.push(g) } } } return e });
+	[].filter || (Array.prototype.filter = function(b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var f = Object(this), a = f.length >>> 0, e = [], d = arguments[1], c, g; for (c = 0; c < a; c++) { if (c in f) { g = f[c]; if (b.call(d, g, c, f)) { e.push(g) } } } return e });
 	// Array some
-	[].some || (Array.prototype.some = function(b) { if (this == null) { throw new TypeError("this is null or not defined") } var e = Object(this); var a = e.length >>> 0; if (typeof b != "function") { throw new TypeError(b + " is not a function") } var d = arguments[1]; for (var c = 0; c < a; c++) { if (c in e && b.call(d, e[c], c, e)) { return true } } return false });
+	[].some || (Array.prototype.some = function(b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var e = Object(this), a = e.length >>> 0, d = arguments[1], c; for (c = 0; c < a; c++) { if (c in e && b.call(d, e[c], c, e)) { return true } } return false });
 	// Array every
-	[].every || (Array.prototype.every || function(b) { if (this == null) { throw new TypeError("this is null or not defined") } var e = Object(this); var a = e.length >>> 0; if (typeof b != "function") { throw new TypeError(b + " is not a function") } var d = arguments[1]; for (var c = 0; c < a; c++) { if (c in e && !b.call(d, e[c], c, e)) { return false } } return true });
+	[].every || (Array.prototype.every || function(b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var e = Object(this), a = e.length >>> 0, d = arguments[1], c; for (c = 0; c < a; c++) { if (c in e && !b.call(d, e[c], c, e)) { return false } } return true });
 	// Function bind
 	(function(){}).bind || (Function.prototype.bind = function(a) { if (typeof this !== "function") { throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable") } var e = Array.prototype.slice.call(arguments, 1), d = this, b = function() { }, c = function() { return d.apply(this instanceof b && a ? this : a, e.concat(Array.prototype.slice.call(arguments))) }; b.prototype = this.prototype; c.prototype = new b(); return c });
 	//Object create
 	Object.create = Object.create || (function () { function F() { } return function (o) { if (arguments.length != 1) { throw new Error("Object.create implementation only accepts one parameter.") } F.prototype = o; return new F() } }());
 	//String trim
-	''.trim || (String.prototype.trim = function () { return this.replace(/^[\s\uFEFF\u00A0]+|[\s\uFEFF\u00A0]+$/g, '') })
+	''.trim || (String.prototype.trim = function() { return this.replace(/^[\s\uFEFF\u00A0]+|[\s\uFEFF\u00A0]+$/g, '') });
 	
 	//internal `requestAnimationFrame`
-	var requestAnimationFrame,
-		cancelAnimationFrame;
 	(function() {
-		var lastTime = 0;
-		var vendors = ['webkit', 'moz', 'ms'];
-		for (var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+		var lastTime = 0,
+			vendors = ['webkit', 'moz', 'ms'],
+			x;
+		for (x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
 			requestAnimationFrame = window[vendors[x] + 'RequestAnimationFrame'];
 			cancelAnimationFrame = window[vendors[x] + 'CancelAnimationFrame'] || window[vendors[x] + 'CancelRequestAnimationFrame'];
 		}
@@ -200,7 +202,7 @@ IO:
 			Promise,
 			PromiseCollection,
 			undefined,
-			isFunc = function isFunc(func) {
+			isFunc = function (func) {
 				return (typeof func === 'function')
 			},
 			setImmediate = global.setImmediate || (global.msClearImmediate && global.msSetImmediate) /*IE10*/ || function (callback) {
@@ -211,12 +213,9 @@ IO:
 			};
 
 		Deferred = function (canceler) {
-			var defer = this;
 			this.canceler = canceler
 			this.isResolved = false
 			this.isRejected = false
-			//this.isHandled = false
-			//this.isError = false
 			this.result = []//arguments array
 			this.Callbacks = []
 			this.newPromise
@@ -353,10 +352,10 @@ IO:
 				timer = (ms) ? setTimeout : setImmediate;
 			id = timer(this.resolve.bind(this), ms)
 			return this.then(
-				function done() {
+				function () {//done
 					(ms) ? clearTimeout(id) : clearImmediate(id)
 				},
-				function canceled() {
+				function () {//canceled
 					(ms) ? clearTimeout(id) : clearImmediate(id)
 				}
 			)
@@ -372,10 +371,10 @@ IO:
 			}, ms)
 
 			return this.then(
-				function done() {
+				function() {//done
 					(ms) ? clearTimeout(id) : clearImmediate(id)
 				},
-				function canceled() {
+				function() {//canceled
 					(ms) ? clearTimeout(id) : clearImmediate(id)
 				}
 			)
@@ -386,10 +385,10 @@ IO:
 				timer = (ms) ? setTimeout : setImmediate;
 			id = timer(this.progress.bind(this), ms)
 			return this.then(
-				function done() {
+				function() {//done
 					(ms) ? clearTimeout(id) : clearImmediate(id)
 				},
-				function canceled() {
+				function() {//canceled
 					(ms) ? clearTimeout(id) : clearImmediate(id)
 				}
 			)
@@ -399,57 +398,31 @@ IO:
 			if (ms) {
 				var delayPromise = new Deferred(), defer = this;
 				this.then(
-					function done() {
+					function() {//done
 						return delayPromise.wait(ms).then(function () { return defer.result[0] })
 					},
-					function canceled() {
+					function() {//canceled
 						return delayPromise.timeout(ms).then(null, function () { return defer.result[0] })
 					}
 				)
 			}
 			return this;
 		}
+		//Current promise can't be resolved until passed promise will resolve. If passed promise will fail, current promise also will fail with that error
 		Deferred.prototype.and = function (anotherPromise) {
 			return this.then(
-				function done(val) {
-					return anotherPromise.then(
+				function (val) {//done
+					return Promise(anotherPromise).then(
 						function () { return val }, //success
 						function (err) { return err }) //switch to error state with this error
 				}
 			)
 		}
 
-
-		//??????????????????????????????
-		//current promise can't be resolved while joined promises are not resolved
-		Deferred.prototype.join = function (/*promises*/) {
-			var pushedPromise = arguments;
-
-			this.Callbacks.unshift({
-				done: function (val) {
-					return every(pushedPromise).then(
-						function () { return val }, //save old context
-						function () { return new Promise() } //block
-					)
-				}
-			})
-
-			return this;
-		}
-
 		// Polymorph Promise constructor.
 		// Promise constructor has to be used with `new` operator, 
-		// else returns istant resolved promise object
+		// else returns istant resolved promise object.
 		Promise = function (initFunc, cancelFunc) {
-			/// <signature>
-			/// <summary>Polymorph Promise constructor.</summary>
-			/// <param name="initFunc" type="Function">Initializtion function</param>
-			/// <param name="cancelFunc" type="Function">Cancelection function</param>
-			/// <field name='then' type='Function'>Attach callbacks</field>
-			/// <returns type="Promise">Promise object</returns>
-			/// </signature>
-
-
 			var isInstance = (this instanceof Promise),
 				defer;//Deferred, that will serve this Promise
 			
@@ -467,23 +440,13 @@ IO:
 					defer.then(function () { return initFunc })
 				}
 
-				defer.promise.then = function (d, e, p) {
-					/// <signature>
-					/// <summary>Attach callbacks</summary>
-					/// <param name="successCallback" type="Function">Will be called in case of successfull fulfillment</param>
-					/// <param name="errorCallback" type="Function">Will be called in case of any error</param>
-					/// <param name="progressCallback" type="Function">Will be called on every step wile Promise is not fulfilled</param>
-					/// <returns type="Promise">the same Promise object</returns>
-					/// </signature>
-					defer.then(d, e, p)
-					return this;
-				}
-				defer.promise.cancel = function () { defer.cancel(); return this }
-				defer.promise.wait = function (ms) { defer.wait(ms); return this }
-				defer.promise.timeout = function (ms) { defer.timeout(ms); return this }
-				defer.promise.interval = function (ms) { defer.interval(ms); return this }
-				defer.promise.delay = function (ms) { defer.delay(ms); return this }
-				defer.promise.and = function (p) { defer.and(p); return this }
+				defer.promise.then = function(d, e, p) {defer.then(d, e, p); return this}
+				defer.promise.cancel = function () {defer.cancel(); return this}
+				defer.promise.wait = function(ms) {defer.wait(ms); return this}
+				defer.promise.timeout = function(ms) {defer.timeout(ms); return this}
+				defer.promise.interval = function(ms) {defer.interval(ms); return this}
+				defer.promise.delay = function(ms) {defer.delay(ms); return this}
+				defer.promise.and = function(p) {defer.and(p); return this}
 			}
 			//if called to as a function
 			else {
@@ -515,9 +478,6 @@ IO:
 
 			return defer.promise;
 		}
-
-
-
 
 		PromiseCollection = function(specificFunc) {
 			return function() {
@@ -553,7 +513,7 @@ IO:
 							)
 						})
 					})
-				}, function canceler() {
+				}, function () {
 					//cancel all Promises in array
 					promArr && setImmediate(function() {
 						promArr.forEach(function(p) {
@@ -614,7 +574,7 @@ IO:
 				itemProgress: noop
 			}
 		})
-		//`some` method, gathers many promises and becomes resolved, when they all fullfilled with any results. But if all promises are rejected `some` also became rejected.
+		//`some` method, gathers many promises and becomes resolved, when they all fullfilled with any results. But if all promises are rejected `some` also becomes rejected.
 		Promise.some = PromiseCollection(function(props, resolveCollection, rejectCollection, progressCollection) {
 			return {
 				itemResolved: function(i, result) {
@@ -622,7 +582,8 @@ IO:
 					props.done += 1;
 					props.Results[i] = result
 					if (props.done == props.length) {
-						resolveCollection(props.Results)
+						//return only successful results
+						resolveCollection(props.Results.filter(function() {return true}))
 					}
 				},
 				itemRejected: function(i, err) {
@@ -641,20 +602,22 @@ IO:
 			}
 		})
 		
-		
-		//Determines if `value` is a Promise like object
-		Promise.isPromise = function (value) {
+		//Determines if `value` is a Promise-like object
+		Promise.isPromise = function(value) {
 			return value && typeof value === 'object' && typeof value.then === 'function';
 		}
-
+		
 		//expose `Promise` constructor and helpers
 		return Promise;
 	}(global));//`global` is an environment global variable
 
 
+	
+
 	// Promise of document 'DOMContentLoaded'
 	Core.DOMReady = new Promise(function (onready, onabort) {
-		var isReady;
+		var isReady,
+			frameElement = 1;
 		function complete() {
 			if (isReady) return;
 			//IEContentLoaded
@@ -691,7 +654,6 @@ IO:
 			// for iframes
 			document.attachEvent('onreadystatechange', complete) //readyState checked in `complete` function
 			// avoid frames with different domains issue
-			var frameElement = 1;
 			try { frameElement = window.frameElement } catch (e) { }
 			if (!frameElement && document.head.doScroll) {
 				(function () {
@@ -699,7 +661,7 @@ IO:
 						document.head.doScroll('left')
 						complete()
 					} catch (e) {
-						setTimeout_1(arguments.callee)
+						setTimeout_10(arguments.callee)
 						return;
 					}
 				}())
@@ -708,6 +670,7 @@ IO:
 			window.attachEvent('onload', complete)
 		}
 	})
+
 
 	// Promise of window 'load'
 	Core.DOMLoaded = new Promise(
@@ -742,8 +705,8 @@ IO:
 				window.attachEvent('onabort', complete)
 			}
 		},
-		function canceler() {
-			//stop page loading
+		function () {
+			//cancel page loading
 			if (!!window.stop) window.stop()
 			else if (!!document.execCommand) document.execCommand('Stop')
 		}
@@ -756,7 +719,7 @@ IO:
 		Core.DOMLoaded.then(function() { document.readyState = 'complete' })
 	}
 
-	//Promise of loaded included UI modules
+	//Promise of included UI modules
 	Core.UIReady = new Promise(function (loaded, error, progressed) {
 		Core.DOMReady.then(
 			function () {
@@ -765,7 +728,7 @@ IO:
 		)
 	})
 
-
+	
 	//Because of dinamic loader DOMReady and DOMLoaded need to be deferred while necessary resources will be ready
 	//Advanced DOMLoaded, that fulfills only when all (inclusive async) resources loaded
 	Core.DOMLoaded = (function() {
@@ -819,9 +782,9 @@ IO:
 
 
 										/* Loader 1.8 */
-	//http://pieisgood.org/test/script-link-events/
-	Core.load = function (src, options) { //returns Promise
-		options || (options = {})// {defer: {Boolean}, async: {Boolean}}, type: {String}, (reload: {Boolean} - not emplemented yet)
+	//help for dev http://pieisgood.org/test/script-link-events/ 
+	Core.load = function(src, options) {
+		options || (options = {})
 
 		//`options` may also be String of attributes/parameters, separated by space or comma: 'defer reload' or 'async, reload'
 		if (typeof options === 'string') {
@@ -831,7 +794,7 @@ IO:
 				reload: /(^|\s*,\s*|\s+)reload($|\s*,\s*|\s+)/.test(options)
 			}
 		}
-
+		
 		var n,
 			elem,
 			loadPromise,
@@ -952,12 +915,13 @@ IO:
 							return false;
 						}()),
 						//Opera, that do not support 'defer' and 'async', and always loads scripts synchronously
-						isOldOpera = !!(window.opera && Object.prototype.toString.call(window.opera) == "[object Opera]" && !('async' in elem));
+						isOldOpera = !!(window.opera && Object.prototype.toString.call(window.opera) == "[object Opera]" && !('async' in elem)),
+						len, script;
 
 					//'defer' fallback for deferred loading
 					if (isBrokenOrderBrowser && options.defer) {
 						// First script is prefetched, after that it is inserted to DOM in correct order one by one to be executed.
-						var len = Resources.sequence.js.length;
+						len = Resources.sequence.js.length;
 
 						elem.onload = function () {
 							if (isLoaded) return
@@ -981,7 +945,7 @@ IO:
 						elem.src || (elem.src = Core.config.cache ? src : Core.URL.randomize(src))
 
 						//start prefetch in parallel way
-						var script = document.createElement('script')
+						script = document.createElement('script')
 						script.type = 'text/prefetch'
 						script.onload = function () {
 							if (len) {
@@ -1123,7 +1087,7 @@ IO:
 
 				},
 				//on cancel loading
-				function canceler() {
+				function () {
 					// if Promise fulfilled
 					if (isLoaded || isCanceled) return
 					isCanceled = true
@@ -1251,6 +1215,7 @@ IO:
 								})
 							}
 							//fix absent 'onload'
+							var style, pollingId;
 							if (isOnloadNotSupported) {
 								//detect 404
 								//Core.URL.isAvailableAsync(elem.href).then(function (isAvail) {
@@ -1259,7 +1224,6 @@ IO:
 								//		return
 								//	}
 								//Style import trick
-								var style, pollingId;
 								style = document.createElement('style');
 								style.type = 'text/css'
 								style.textContent = '@import "' + elem.href + '"'
@@ -1271,7 +1235,7 @@ IO:
 										//remove from DOM
 										style.parentNode && style.parentNode.removeChild(style)
 										//clean
-										style = pollingId = null
+										style = pollingId = undefined
 									} catch (e) { }
 								})
 								//insert to DOM
@@ -1280,7 +1244,6 @@ IO:
 							}
 								//fix absent 'onload' and 'onerror'
 							else if (isBrokenBrowser) {
-								var pollingId;
 								pollingId = setInterval_15(function() {
 									try {
 										//elem.sheet.cssRules; // accessable when loaded
@@ -1290,7 +1253,7 @@ IO:
 											elem.onerror && elem.onerror() //call errorback
 										}
 										clearInterval(pollingId)
-										pollingId = null
+										pollingId = undefined
 									} catch (err) {
 										//for Safari 5. It has cross-origin restriction.
 										//next is stolen from 'yepnope'
@@ -1328,7 +1291,7 @@ IO:
 					}
 				},
 				//on cancel loading
-				function canceler() {
+				function () {
 					// if Promise fulfilled
 					if (isLoaded || isCanceled) return
 					isCanceled = true
@@ -1413,7 +1376,7 @@ IO:
 					if (elem.complete && elem.onload) { elem.onload() }
 				},
 				//on cancel loading
-				function canceler() {
+				function () {
 					if (isLoaded || isCanceled) return
 					isCanceled = true
 					elem.onload = elem.onreadystatechange = elem.onabort = elem.onerror = null
@@ -1613,7 +1576,7 @@ IO:
 					}
 				},
 				//on cancel loading
-				function canceler() {
+				function () {
 					if (isLoaded || isCanceled) return;
 					isCanceled = true
 					elem.cleanHandlers && elem.cleanHandlers()
@@ -1669,7 +1632,7 @@ IO:
 					)
 		        },
 				//on cancel loading
-				function canceler() {
+				function () {
 					if (isLoaded || isCanceled) return;
 				    isCanceled = true
 				    //cancel Promise `requestAsync`
@@ -1683,7 +1646,7 @@ IO:
 
 			case 'jsonp':
 				loadPromise = new Promise(function(loaded, failed, progress) {
-					var callbackName = 'coreJsonCallback_' + (new Date).getTime(),
+					var callbackName = 'coreJsonCallback_' + Math.round(Math.random() * Math.pow(10, 15)),
 						match;
 
 					if (!/(\?|\&)callback=/.test(src)) {
@@ -1694,10 +1657,10 @@ IO:
 					}
 					//save `callbacName` in outer scope
 					textContent = callbackName
-					window[callbackName] = function(data) {
+					window[callbackName] = function(/*data*/) {
 						delete window[callbackName]
 						isLoaded = true
-						loaded(data)//callback
+						loaded.apply(null, arguments)//callback
 					}
 					options.type = 'script'
 					elem = Core.load(src, options).then(null, function(err) {
@@ -1707,7 +1670,7 @@ IO:
 					}, progress)
 				},
 				//on cancel loading
-				function canceler() {
+				function () {
 					if (isLoaded || isCanceled) return;
 					isCanceled = true
 					//cancel Promise
@@ -1768,7 +1731,7 @@ IO:
 					)
 				},
 				//on cancel loading
-				function canceler() {
+				function () {
 					if (isLoaded || isCanceled) return
 					isCanceled = true
 					//stop any delayed execution
@@ -1790,9 +1753,7 @@ IO:
 	}
 
 
-
-
-
+	
 
 
 										/* Module constructor */
@@ -1871,15 +1832,15 @@ IO:
 
 
 										/* Sandbox constructor */
-
-	Sandbox = function (moduleName) {
+	//Creates new sandbox instance
+	Sandbox = function(moduleName) {
 		this.template = Templater(this)//pass new sandbox as a context
 		this.moduleName = moduleName
 		this.moduleUrl = '.'
-		this.root = (document && document.querySelector('[data-module="' + moduleName + '"]')) || document
+		this.root = (document && moduleName && document.querySelector('[data-module="' + moduleName + '"]')) || document || null
 	}
 
-	Sandbox.prototype.hasFeature = function (featureName) {
+	Sandbox.prototype.hasFeature = function(featureName) {
 		var feature;
 		if (typeof featureName !== 'string') return;
 		if (featureName in Core.Features) {
@@ -1889,31 +1850,33 @@ IO:
 		return false;
 	}
 
-	Sandbox.prototype.load = function (url) {
+	//Alias for `Core.load(url, options)`, but with additional context templating rules for URLs
+	Sandbox.prototype.load = function(url) {
 		url = this.template(url) //apply module variables
 		return Core.load.apply(Core, arguments);
 	}
 
 	Sandbox.prototype.Promise = Promise
-	
-	//alternative way to add listener of core events. These events are removed on every stopping of Module, so they may be used in init()
-	Sandbox.prototype.listen = function (event, handler) {
-		if (event && handler && ModulesRegistry[this.moduleName]) {
+
+	//>Attaches Core event listeners in runtime. This is an alternative way to add listener of Core events. These events are removed, when module will be destroied, so they may be used in `init()`.
+	Sandbox.prototype.listen = function(eventType, handler) {
+		if (eventType && handler && ModulesRegistry[this.moduleName]) {
 			ModulesRegistry[this.moduleName].body.runtime_listen || (ModulesRegistry[this.moduleName].body.runtime_listen = {})
-			var listener = ModulesRegistry[this.moduleName].body.runtime_listen[event] || [];
+			var listener = ModulesRegistry[this.moduleName].body.runtime_listen[eventType] || [];
 			listener = (listener instanceof Array) ? listener.concat(handler) : [listener].concat(handler)
-			ModulesRegistry[this.moduleName].body.runtime_listen[event] = listener
+			ModulesRegistry[this.moduleName].body.runtime_listen[eventType] = listener
 		}
 		return this;  // return Sandbox object
 	}
 
-	Sandbox.prototype.action = function (event, detail) {
-		if (event && (event in Core.actions)) {
+	//Generates action in Core with attached details.
+	Sandbox.prototype.action = function(actionType, detail) {
+		if (actionType && (actionType in Actions)) {
 			detail = detail || {}
 			var i = 0, func;
-			while (func = Core.actions[event][i++])
+			while (func = Actions[actionType][i++])
 				func(detail, {
-					type: event,
+					type: actionType,
 					targetName: this.moduleName,
 					timeStamp: (new Date()).getTime(),
 					detail: detail
@@ -1922,7 +1885,8 @@ IO:
 		return this; // return Sandbox object
 	}
 
-	Sandbox.addTemplateRule = function (regexp, result) {
+	//Ads new templating rule for sandbox.template() call
+	Sandbox.addTemplateRule = function(regexp, result) {
 		SandboxTemplateRules.push({ regexp: regexp, result: result })
 	}
 
@@ -1932,7 +1896,7 @@ IO:
 	//Sandbox.addTemplateRule(/{data:.+}/g, function (context) { return ModulesRegistry[context.moduleName] ? (ModulesRegistry[context.moduleName].body.data || '') : undefined })
 
 
-
+	
 
 
 										/* Templater factory */
@@ -1963,15 +1927,19 @@ IO:
 
 	Core.template = Templater()
 
-	Core.addTemplateRule = function (regexp, result) {
+	//>Ads new templating rule for Core.template() call
+	Core.addTemplateRule = function(regexp, result) {
 		TemplateRules.push({regexp: regexp,	result: result})
 	}
 
 	//base Core variables
 	Core.addTemplateRule(/{baseUrl}/gi, function () { return Core.config.baseUrl })
 	//DOM
-	Core.addTemplateRule(/{dom:search}/g, function () { return location.search.substr(1) })
-	Core.addTemplateRule(/{dom:url}/g, function () { return location.protocol + '//' + location.host + location.pathname })
+	Core.addTemplateRule(/{location:protocol}/g, location.protocol)
+	Core.addTemplateRule(/{location:search}/g, function() { return location.search.substr(1) })
+	Core.addTemplateRule(/{location:url}/g, function() { return location.protocol + '//' + location.host + location.pathname })
+	Core.addTemplateRule(/{location:hash}/g, function() { return location.hash.substr(1) })
+
 
 	
 
@@ -1981,10 +1949,9 @@ IO:
 
 
 										/*Utility Functions*/
-
+	
 	var Util = Core.Util = {} //private utilities
-
-
+		
 	//Limited frequency of function execution
 	Util.limited = function(func, ms) {
 		var callRemains = false,
@@ -2014,8 +1981,8 @@ IO:
 			}
 		}
 	}
-	
-	//delay function execution until rapid calling will end/stop
+
+	//Delay function execution until rapid calling will end/stop
 	Util.deferred = function(func, ms) {
 		var timer = null;
 		if (ms) { //use timeout
@@ -2044,8 +2011,8 @@ IO:
 		}
 	}
 
-	//XmlHttpRequest constructor for AJAX requests
-	Util.XHR = function () {
+	//Cross browser XmlHttpRequest constructor
+	Util.XHR = function() {
 		var HttpRequest;
 		HttpRequest = (function () {
 			try { return new XMLHttpRequest() } catch (err) { }
@@ -2061,8 +2028,7 @@ IO:
 	}
 
 	//Error line number absence fixing
-	Util.fixError = function (err) {
-		//try to find the line where an error accured
+	Util.fixError = function(err) {
 		err.line = err.line || err.lineNumber || (function () {
 			if (!err.stack) return 0;
 			var Stacks = err.stack,
@@ -2080,10 +2046,11 @@ IO:
 		err.source = (err.sourceURL || err.fileName || (function () {
 			return ''
 		}())).split('?')[0]
+		return err;
 	}
 
-	// Request for text content of any file (private function)
-	Util.requestTextContent = function (url, isAsync) { //returns Promise
+	//Request for text content of any file. Used for internal tasks
+	Util.requestTextContent = function(url, isAsync) {
 		return new Promise(function (complete, error) {
 			var xhr = new Util.XHR;
 			url = Core.template(url)
@@ -2112,15 +2079,17 @@ IO:
 		})
 	}
 
-	//evaluate JavaScript expression in closed function scope. `var` and `return` statements are not allowed
-	Util.execute = function (expression) {  //returns result
+	//Evaluate JavaScript expression in closed function scope. `var` and `return` statements are not allowed
+	Util.execute = function(expression) {  //returns result
 		return (new Function('return (' + expression + ')'))();
 	}
 
-	Util.asyncCall = function (isAsync, func) {
+	//Call function asynchronously or not
+	Util.asyncCall = function(isAsync, func) {
 		return isAsync ? setTimeout_1(func) : (undefined, func())
 	}
 
+	//Recursively merges one object to another
 	Util.merge = function(objTo, objFrom) {
 		var extend = function(objTo, objFrom) {
 			var i;
@@ -2142,7 +2111,8 @@ IO:
 		return objTo;
 	}
 
-	Util.relocateCSS = function (cssText, oldCssLocation, newCssLocation) {
+	//Parses string of CSS and correct all url() statements accordingly to new css-file location
+	Util.relocateCSS = function(cssText, oldCssLocation, newCssLocation) {
 		if (!cssText) return '';
 		//defaults
 		if (!oldCssLocation && location.href) oldCssLocation = location.href
@@ -2214,7 +2184,8 @@ IO:
 		})
 	}
 
-	Util.injectCSS = function(cssText, Attrs, el) { //returns style DOM object
+	//Inserts <style> element to document
+	Util.injectCSS = function(cssText, Attrs, el) {
 		// http://davidwalsh.name/add-rules-stylesheets
 		if (!document || !cssText) return null;
 		var i, styleElem = el || document.createElement('style');
@@ -2251,22 +2222,20 @@ IO:
 		} else if (elem.removeEventListener)
 			elem.removeEventListener(type, handler, false)
 	}
-
-
-
+	
 
 	Core.URL = {} //Basic URL manipulation
 
-	// Adds a parameter with random value, if not exist
-	Core.URL.randomize = function (url) { //returns URL
+	//Adds a parameter with random value, if not exists
+	Core.URL.randomize = function(url) { //returns URL
 		if (!/(\?|\&)rand=/.test(url)) {
-			return url + (url.indexOf('?') === -1 ? '?' : '&') + 'rand=' + (Math.random() * 10000000).toFixed(0)
+			return url + (url.indexOf('?') === -1 ? '?' : '&') + 'rand=' + (Math.random() * Math.pow(10,7)).toFixed(0)
 		}
 		return url
 	}
 
-	// Checks if URL is not in the same domain
-	Core.URL.isExternal = function (url) { //returns Boolean
+	//Checks if URL is not in the same domain
+	Core.URL.isExternal = function(url) {//returns Boolean
 		url = Core.template(url) //replace variables in url
 		return (
 			(/htt(p|ps):\/\//i.test(url))
@@ -2274,8 +2243,8 @@ IO:
 		)
 	}
 
-	// Sync checks file by url for existence/availability
-	Core.URL.isAvailable = function (url) { //returns Boolean
+	//Synchronously checks file by url for existence/availability
+	Core.URL.isAvailable = function(url) { //returns Boolean
 		var xhr = new Util.XHR;
 		url = Core.template(url)
 		try {
@@ -2293,8 +2262,8 @@ IO:
 		}
 	}
 
-	// Async checks file by url for existence/availability
-	Core.URL.isAvailableAsync = function (url) { //returns Promise
+	//Asynchronously checks file by url for existence/availability
+	Core.URL.isAvailableAsync = function(url) { //returns Promise
 		return new Promise(function (available, error) {
 			var xhr = new Util.XHR;
 			url = Core.template(url)
@@ -2321,15 +2290,9 @@ IO:
 			}
 		})
 	}
-	
+
+	//Normalizes paths
 	Core.URL.normalize = function (url) {
-		/// <signature>
-		/// <summary>Normalize paths</summary>
-		/// <param name="url" type="String">URL or path string</param>
-		/// <returns type="Function">
-		/// Valid URL
-		/// </returns>
-		/// </signature>
 		if (!url) return '';
 		url = url.trim()
 		url = url.replace(/^\/\//g, location.protocol + '//')//insert protocol
@@ -2340,12 +2303,11 @@ IO:
 	}
 
 
-
 	Core.JSON = {}//Basic JSON manipulation
 	Core.JSON.parse = global.JSON ? JSON.parse : Util.execute
 	Core.JSON.stringify = global.JSON ? JSON.stringify : function(value) {
 		return (function stringify(value) {
-			var k;
+			var k, Items;
 			if (!value) {
 				return String(value)
 			}
@@ -2354,7 +2316,7 @@ IO:
 					case '[object Function]':
 						return 'undefined';
 					case '[object Object]':
-						var Items = []
+						Items = []
 						for (k in value) {
 							if (value.hasOwnProperty(k)) {
 								Items.push('"' + k + '":' + stringify(value[k]))
@@ -2374,7 +2336,7 @@ IO:
 
 
 	// Oldschool request
-	Core.request = function (url, error) {//returns value
+	Core.request = function(url, error) {
 		var response;
 		Util.requestTextContent(url, false).then(
 			function (r) { response = r },
@@ -2383,74 +2345,52 @@ IO:
 		return response || ' ';
 	}
 	// Synchronous request
-	Core.requestSync = function (url) {
+	Core.requestSync = function(url) { //returns Promise
 		return Util.requestTextContent(url, false)
 	}
 	// Asynchronous request
-	Core.requestAsync = function (url) {
+	Core.requestAsync = function(url) { //returns Promise
 		return Util.requestTextContent(url, true)
 	}
 
 
-
+	
 
 
 
 
 
 	// Error handler
-	Core.error = function (/*arguments*/) {
-		var i = 0, msg, err = '';
+	Core.error = function(/*arguments*/) {
+		var i = 0, msg, Err = '';
 
 		//join all messages and error objects from arguments to one string
 		while (msg = arguments[i++]) {
-			err += ((msg.message) ? (msg.name +': '+ msg.message) : msg) + ' '
+			Err.push(((msg.message) ? (msg.name +': '+ msg.message) : msg))
 		}
-		console.error(err)
-	}
-
-	//App configuration
-	Core.config = {
-		// default home url
-		baseUrl: location.href ? (location.protocol + '//' + location.host + location.pathname.substr(0, location.pathname.lastIndexOf('/'))) : '',
-		cache: false,
-		cacheImages: false, //ignored if `cache` is false
-		cacheMedia: false //ignored if `cache` is false
-	}
-
-	//Function to configure Core.config
-	Core.configure = function(config) {
-		if (!config) return
-		var config = arguments[0],
-			url = (typeof config === 'string') ? Core.template(config) : '';
-
-		//if argument is config file url
-		if (url && Core.URL.isAvailable(url)) {
-			config = Util.execute(Core.request(url))
-			if (config) {
-				Util.merge(Core.config, config)
-			}
-		}
-		//if argument is config object
-		else {
-			Util.merge(Core.config, config)
-		}
-
+		console.error(Err.join(' '))
 		return this;
 	}
 
+	//App configuration.
+	Core.config = {
+		//Default home URL
+		baseUrl: location.href ? (location.protocol + '//' + location.host + location.pathname.substr(0, location.pathname.lastIndexOf('/'))) : '',
+		cache: false, //Enables default browser's http cache
+		cacheImages: false, //Enables cacheing for image resources. Ignored if `cache` is false
+		cacheMedia: false //Enables cacheing for media resources. Ignored if `cache` is false
+	}
 	
-
 	// Send global events
-	Core.invoke = function (event, detail) {
-		if (!event) return;
+	Core.invoke = function(eventType, detail) {
+		if (!eventType) return;
 		detail = detail || {}
 		var i, n, handler;
 		
 		//find handlers in Core listeners collection
-		if (event in CoreListeners) {
+		if (eventType in Events) {
 			n = 0;
-			while (handler = CoreListeners[event][n++]) {
+			while (handler = Events[eventType][n++]) {
 				handler(detail)
 			}
 		}
@@ -2462,26 +2402,26 @@ IO:
 				ModulesRegistry[i]
 				&& ModulesRegistry[i].initiated
 				&& 'listen' in ModulesRegistry[i].body
-				&& event in ModulesRegistry[i].body.listen
+				&& eventType in ModulesRegistry[i].body.listen
 			) {
 				//single function
-				if (typeof ModulesRegistry[i].body.listen[event] === 'function') {
+				if (typeof ModulesRegistry[i].body.listen[eventType] === 'function') {
 					try {//catch errors without stopping app execution
-						ModulesRegistry[i].body.listen[event](detail)
+						ModulesRegistry[i].body.listen[eventType](detail)
 					} catch (err) {
 						Util.fixError(err) //implement err.line
-						Core.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + event + ':' + err.line + ']', err)
+						Core.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + ':' + err.line + ']', err)
 					}
 				}
 				//array of functions
-				else if (ModulesRegistry[i].body.listen[event].length) {
+				else if (ModulesRegistry[i].body.listen[eventType].length) {
 					n = 0;
-					while (handler = ModulesRegistry[i].body.listen[event][n++]) {
+					while (handler = ModulesRegistry[i].body.listen[eventType][n++]) {
 						try {//catch errors without stopping app execution
 							handler(detail)
 						} catch (err) {
 							Util.fixError(err) //implement err.line
-							Core.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + event + '.handler(' + (n - 1) + '):' + err.line + ']', err)
+							Core.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']', err)
 						}
 					}
 
@@ -2493,43 +2433,41 @@ IO:
 				ModulesRegistry[i]
 				&& ModulesRegistry[i].initiated
 				&& ModulesRegistry[i].body['runtime_listen']
-				&& event in ModulesRegistry[i].body.runtime_listen
+				&& eventType in ModulesRegistry[i].body.runtime_listen
 			) {
 				n = 0;
-				while (handler = ModulesRegistry[i].body.runtime_listen[event][n++]) {
+				while (handler = ModulesRegistry[i].body.runtime_listen[eventType][n++]) {
 					try {//catch errors without stopping app execution
 						handler(detail)
 					} catch (err) {
 						Util.fixError(err) //implement err.line
-						Core.error('[Module: ' + ModulesRegistry[i].name + ':runtime_listen.' + event + '.handler(' + (n - 1) + '):' + err.line + ']', err)
+						Core.error('[Module: ' + ModulesRegistry[i].name + ':runtime_listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']', err)
 					}
 				}
 			}
 		
 		}
 		
-			
+		return this;
 	}
 
-	// Recieve global events
-	Core.listen = function (event, handler) {
+	// Adds Core event listeners in runtime. This is an alternative way to add listener of Core events.
+	Core.listen = function(eventType, handler) {
 		var listener;
-		if (event && handler) {
-			listener = CoreListeners[event] || [];
+		if (eventType && handler) {
+			listener = Events[eventType] || [];
 			listener = (listener instanceof Array) ? listener.concat(handler) : [listener].concat(handler)
-			CoreListeners[event] = listener
+			Events[eventType] = listener
 		}
 		return this;  // return Core object
 	}
-
-	// Send actions to sandbox.
-	Core.action = function (event, detail) {
-		if (event && (event in Core.actions)) {
-			
+	// Generates action in Core with attached details
+	Core.action = function(actionType, detail) {
+		if (eveactionTypent && (actionType in Actions)) {
 			var i = 0, func;
-			while (func = Core.actions[event][i++])
+			while (func = Actions[actionType][i++])
 				func(detail, {
-					type: event,
+					type: actionType,
 					targetName: 'Core',
 					timeStamp: (new Date()).getTime(),
 					detail: detail
@@ -2538,8 +2476,6 @@ IO:
 		return this; // return Core object
 	}
 
-	// Recived events whith multiple handlers
-	Core.actions = {}
 
 
 
@@ -2575,97 +2511,18 @@ IO:
 
 
 
-	//Feature detection, true or false
-	Core.Features = (function () {
-		// Check CSS3, from Modernizr								
-		var checkCSS = (function () {
-			//for NodeJs environment
-			if (!document) {
-				return function () {return false}
-			}
-
-			var domPrefixes = 'Webkit Moz O ms Khtml'.split(' '),
-				testElem = document.createElement('test'),
-				test_style = testElem.style;
-
-			function test_props_all(prop) {
-				var uc_prop = prop.charAt(0).toUpperCase() + prop.substr(1),
-					props = (prop + ' ' + domPrefixes.join(uc_prop + ' ') + uc_prop).split(' ');
-				return !!test_props(props);
-			}
-
-			function test_props(props) {
-				for (var i in props)
-					if (test_style[props[i]] !== undefined)
-						return true
-			}
-			// transitionProperty, backgroundsize, borderimage, boxShadow,
-			// animationName, columnCount, boxReflect, overflowScrolling
-			// opacity, transformProperty, perspectiveProperty
-			// borderRadius
-
-			return function (feature) {
-				switch (feature) {
-					case 'opacity':
-						if (window.operamini) return false
-						test_style.cssText = 'opacity:0.55'
-						return /^0.55$/.test(test_style.opacity)
-					case 'perspectiveProperty':
-						//CSSTRANSFORM3D = ('WebKitCSSMatrix' in window && 'm11' in new WebKitCSSMatrix())
-						//return ('WebKitCSSMatrix' in window && 'm11' in new WebKitCSSMatrix())
-
-						// from Modernizr
-						if (!!test_props(['WebkitPerspective'])) {
-							var st = document.createElement('style'), ret;
-							// "@media (transform-3d),(-o-transform-3d),(-moz-transform-3d),(-ms-transform-3d),(-webkit-transform-3d),(modernizr){#modernizr{height:1px}}"
-							//console.log('(-'+domPrefixes.join('-transform-3d), (-').toLowerCase()+')')
-							st.textContent = '@media (-webkit-transform-3d){#csstransforms3d{left:9px;position:absolute;height:3px;}}'
-							testElem.id = 'csstransforms3d'
-							testElem.style.position = 'absolute'
-							document.head.appendChild(st)
-							document.documentElement.appendChild(testElem)
-							ret = (testElem.offsetLeft == 9 && testElem.offsetHeight == 3)
-							document.documentElement.removeChild(testElem)
-							document.head.removeChild(st)
-							st = null
-							return ret
-						}
-
-						return !!test_props(['perspectiveProperty', 'WebkitPerspective', 'MozPerspective', 'OPerspective', 'msPerspective'])
-
-					case 'transformProperty':
-						return !!test_props(['transformProperty', 'WebkitTransform', 'MozTransform', 'OTransform', 'msTransform'])
-					default:
-						return test_props_all(feature)
-				}
-			}
+	//Feature detection collection
+	Core.Features =  {
+		'touch': document && (('createTouch' in document) || (/android|blackberry/i.test(navigator.userAgent) && 'ontouchstart' in window)),
+		'retina': (function () {
+			return (
+				(window.devicePixelRatio && window.devicePixelRatio >= 2)
+				|| 'matchMedia' in window && window.matchMedia('(min-resolution: 2dppx), (min--moz-device-pixel-ratio:2), (-o-min-device-pixel-ratio:2), (-webkit-min-device-pixel-ratio:2)').matches
+				|| (window.screen && screen.deviceXDPI && screen.logicalXDPI && screen.deviceXDPI / screen.logicalXDPI >= 2) //IE9+
+			) ? true : false
 		}())
-
-		return {
-			// SVG support (from Modernizr)
-			'element-svg': document && !!document.createElementNS && !!document.createElementNS('http://www.w3.org/2000/svg', 'svg').createSVGRect,
-			'css-transform3d': checkCSS('perspectiveProperty'),
-			'css-transform': checkCSS('transformProperty'),
-			'css-transition': checkCSS('transitionProperty'),
-			'css-animation': checkCSS('animationName'),
-			'css-box-shadow': checkCSS('boxShadow'),
-			'css-background-size': checkCSS('backgroundsize'),
-			'css-border-image': checkCSS('borderimage'),
-			'css-columns': checkCSS('columnCount'),
-			'css-border-radius': checkCSS('borderRadius'),
-			'css-opacity': checkCSS('opacity'),
-			//detect touch device/browser
-			'touch': document && (('createTouch' in document) || (/android|blackberry/i.test(navigator.userAgent) && 'ontouchstart' in window)),
-			//detect retina display
-			'retina': (function () {
-				return (
-					(window.devicePixelRatio && window.devicePixelRatio >= 2)
-					|| 'matchMedia' in window && window.matchMedia('(min-resolution: 2dppx), (min--moz-device-pixel-ratio:2), (-o-min-device-pixel-ratio:2), (-webkit-min-device-pixel-ratio:2)').matches
-					|| (window.screen && screen.deviceXDPI && screen.logicalXDPI && screen.deviceXDPI / screen.logicalXDPI >= 2) //IE9+
-				) ? true : false
-			}())
-		}
-	}())
+	}
+	
 
 
 
@@ -2673,9 +2530,28 @@ IO:
 
 
 											/*Core public interface */
+	//Method for extending Core.config object. Old values will be overwritten with new ones
+	Core.configure = function(config) {
+		if (!config) return
+		var	url = (typeof config === 'string') ? Core.template(config) : '';
 
-	Core.include = function (path) { //returns Promise
-		//include files if they are available: index.html, style.css, ie.css, register.js, dictionary.js
+		//if argument is config file url
+		if (url && Core.URL.isAvailable(url)) {
+			config = Util.execute(Core.request(url))
+			if (config) {
+				Util.merge(Core.config, config)
+			}
+		}
+		//if argument is config object
+		else {
+			Util.merge(Core.config, config)
+		}
+
+		return this;
+	}
+
+	//Includes files in document, if they are available: index.html, style.css, ie.css, register.js
+	Core.include = function (path) {
 		if (!path) return
 		path = path.replace(/\/+$/, '')//remove last dash
 		var Proms = [],
@@ -2700,18 +2576,18 @@ IO:
 		}
 
 		//js
-		Proms.push(Core.load(path + '/register.js', 'defer reload'))
+		Proms.push(Core.load(path + '/register.js', 'defer reload').then(function() {
+			var module = ModulesRegistry[lastRegisteredModuleName]
+			module.url = module.moduleUrl = path
+		}))
 
 		//add to Includes collection
 		Includes = Includes.concat(Proms)
 		//return Promise collection
-		return Promise.any(Proms).then(function() {
-			var module = ModulesRegistry[lastRegisteredModuleName]
-			module.url = module.moduleUrl = path
-		});
+		return Promise.any(Proms);
 	}
 
-	Core.register = function(moduleName, moduleBody) { //returns Core object
+	Core.register = function(moduleName, moduleBody) {
 		var sandbox;
 		//`moduleBody` may be object or function-constructor that returns object.
 		if (typeof moduleBody === 'function') {
@@ -2730,9 +2606,8 @@ IO:
 		return this;
 	}
 
-	Core.start = function (/*args*/) { //returns Promise object
+	Core.start = function(moduleName/*,args*/) {
 		var module,
-			moduleName,
 			length = arguments.length,
 			i = 0,
 			Proms = []; //Promises collection
@@ -2750,10 +2625,9 @@ IO:
 			(length > 1) ? null : function (errors) { return errors[0] }
 		);
 	}
-
-	Core.stop = function (/*args*/) { //returns Promise object
+	
+	Core.stop = function(moduleName/*,args*/) {
 		var module,
-			moduleName,
 			length = arguments.length,
 			i = 0,
 			Proms = []; //Promises collection
@@ -2771,25 +2645,25 @@ IO:
 			(length > 1) ? null : function (errors) { return errors[0] }
 		);
 	}
-
-	Core.startAll = function () { //returns Promise object
+	
+	Core.startAll = function() {
 		var moduleName, Proms = [];
 		for (moduleName in ModulesRegistry) { Proms.push(Core.start(moduleName)) }
 		return Promise.any(Proms);
 	}
 
-	Core.stopAll = function () { //returns Promise object
+	Core.stopAll = function() {
 		var moduleName, Proms = [];
 		for (moduleName in ModulesRegistry) { Proms.push(Core.stop(moduleName)) }
 		return Promise.any(Proms);
 	}
 
-	Core.extend = function (extendFunc) {
-		//`extendFunc` may be object or function that can return object
+	//Extends Core object with new properties and methods.
+	Core.extend = function(extendFunc) {
 		var obj, i, j;
 
 		if (typeof extendFunc !== 'function' && (typeof extendFunc !== 'object' || (extendFunc instanceof Array))) {
-			Core.error('Core.extend() argument must be a function or object. Example: Core.extend(function(Core){...}), Core.extend({...})')
+			Core.error('Core.extend() argument must be a function or object.')
 			return
 		}
 
@@ -2799,27 +2673,28 @@ IO:
 
 		for (i in obj) {
 			if (i in Core) {
-				if (/^register|start|stop|startAll|stopAll|extend|invoke|bind|load|configure|template$/.test(i)) {
+				if (/^register|start|stop|extend|invoke|load|template$/.test(i)) {
 					Core.error('"' + i + '" feature is not extendable')
 					continue
 				}
 				for (j in obj[i]) {
-					if (i == 'actions' || i == 'action'/*for backward compability*/) {
+					if (i == 'Actions' || i == 'actions'/*for backward compatability*/) {
 						if (typeof obj[i][j] === 'function') {
-							Core.actions[j] = (j in Core.actions) ? Core.actions[j].concat([obj[i][j]]) : [obj[i][j]]
+							Actions[j] = (j in Actions) ? Actions[j].concat([obj[i][j]]) : [obj[i][j]]
 						}
 						else if (obj[i][j].length)//type array
-							Core.actions[j] = (j in Core.actions) ? Core.actions[j].concat(obj[i][j]) : obj[i][j]
+							Actions[j] = (j in Actions) ? Actions[j].concat(obj[i][j]) : obj[i][j]
 					} else
 						Core[i][j] = obj[i][j]
 				}
-			} else
+			} else {
 				Core[i] = obj[i]
+			}
 		}
-
-		//clean
-		obj = i = j = extendFunc = undefined
+		
+		return this;
 	}
+	
 
 	//Expose Core as a module, that is compatible witn CommonJS and AMD
 	;(function (global, factory) {
