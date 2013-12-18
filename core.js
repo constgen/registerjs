@@ -1,11 +1,6 @@
 ﻿/*
-Version 3.3.5
-
-Compatable with: 
-	- NodeJS
-	- AMD
-
-
+Version 3.3.6
+Compatable with: NodeJS, AMD.
 
 IO:
 	out:
@@ -26,7 +21,7 @@ IO:
 		location = window.location,
 
 		/*internal*/
-		Core = {version: '3.3.5'}, // Application Core
+		Core = {version: '3.3.6'}, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
@@ -48,7 +43,7 @@ IO:
 	
 
 
-										/*Fixes, polyfills*/
+	/*Fixes, polyfills*/
 	
 	//NodeJS polyfill
 	if (nodeGlobal) {
@@ -195,7 +190,7 @@ IO:
 
 
 
-										/* Promise 1.7 */
+	/* Promise 1.7 */
 
 	var Promise = Core.Promise = (function (global) {
 		var Deferred,
@@ -325,7 +320,7 @@ IO:
 			if (this.newPromise) {
 				this.newPromise.then(doneCallback, canceledCallback, progressCallback)
 			}
-			//if Deferred is resolved or rejected, execute doneCallback immediately
+				//if Deferred is resolved or rejected, execute doneCallback immediately
 			else if (this.isResolved || this.isRejected)
 				this.call(handler)
 			else {
@@ -345,7 +340,7 @@ IO:
 			return this
 		}
 
-						/*Helpers*/
+		/*Helpers*/
 		//wait before resolve promise
 		Deferred.prototype.wait = function (ms) {
 			var id,
@@ -448,7 +443,7 @@ IO:
 				defer.promise.delay = function(ms) {defer.delay(ms); return this}
 				defer.promise.and = function(p) {defer.and(p); return this}
 			}
-			//if called to as a function
+				//if called to as a function
 			else {
 				defer = new Deferred()
 				defer.promise = new Promise(function(d, e, p) { defer.then(function(r) { d(r) }, function(r) { e(r) }) })
@@ -635,7 +630,7 @@ IO:
 				document.removeEventListener('DOMContentLoaded', complete, false)
 				window.removeEventListener('load', complete, false)
 			}
-			// IE
+				// IE
 			else if (window.attachEvent) {
 				document.detachEvent('onreadystatechange', complete)
 				window.detachEvent('onload', complete)
@@ -649,7 +644,7 @@ IO:
 			// fallback. this is always called
 			window.addEventListener('load', complete, false)
 		}
-		// IE
+			// IE
 		else if (window.attachEvent) {
 			// for iframes
 			document.attachEvent('onreadystatechange', complete) //readyState checked in `complete` function
@@ -682,7 +677,7 @@ IO:
 					window.removeEventListener('load', complete, false)
 					window.removeEventListener('abort', complete, false)
 				}
-				// IE
+					// IE
 				else if (window.attachEvent) {
 					window.detachEvent('onload', complete)
 					window.detachEvent('onabort', complete)
@@ -699,7 +694,7 @@ IO:
 				window.addEventListener('load', complete, false)
 				window.addEventListener('abort', complete, false)
 			}
-			// IE
+				// IE
 			else if (window.attachEvent) {
 				window.attachEvent('onload', complete)
 				window.attachEvent('onabort', complete)
@@ -781,7 +776,7 @@ IO:
 
 
 
-										/* Loader 1.8 */
+	/* Loader 1.8 */
 	//help for dev http://pieisgood.org/test/script-link-events/ 
 	Core.load = function(src, options) {
 		options || (options = {})
@@ -810,13 +805,13 @@ IO:
 			switch (elem.nodeName.toLowerCase()) {
 				//JavaScript files
 				case 'script': options.type = 'script'; break
-				//CSS files
+					//CSS files
 				case 'style': case 'link': options.type = 'style'; break
-				//Image files
+					//Image files
 				case 'img': options.type = 'image'; break
-				//audio
+					//audio
 				case 'audio': options.type = 'audio'; break
-				//video
+					//video
 				case 'video': options.type = 'video'; break
 				default: options.type = undefined
 			}
@@ -905,15 +900,15 @@ IO:
 					//predefine possible error message
 					failed = failed.bind(null, new Error('Error 404: Script \'' + src + '\' not found'))
 
-					//old webkit (v534.1 and lower) has no execution order for dinamicly created scripts
+					//old webkit (v534.13 and lower) has no execution order for dinamicly created scripts
 					var isBrokenOrderBrowser = (function() {
-							var match;
-							if (!navigator.userAgent) return false;
-							match = /(webkit)[\/]([\w.]+)/i.exec(navigator.userAgent)
-							//check version of webkit
-							if (match && match[2]) return (parseFloat(match[2], 10) <= 534.1);
-							return false;
-						}()),
+						var match;
+						if (!navigator.userAgent) return false;
+						match = /(webkit)[\/]([\w.]+)/i.exec(navigator.userAgent)
+						//check version of webkit
+						if (match && match[2]) return (parseFloat(match[2], 10) <= 534.13);
+						return false;
+					}()),
 						//Opera, that do not support 'defer' and 'async', and always loads scripts synchronously
 						isOldOpera = !!(window.opera && Object.prototype.toString.call(window.opera) == "[object Opera]" && !('async' in elem)),
 						len, script;
@@ -966,7 +961,7 @@ IO:
 						document.head.appendChild(script)
 					}
 
-					//Async
+						//Async
 					else if (options.defer || options.async) {
 						//options.defer - Parallel loading. Scripts will be ready in order, that they are loaded, but executed in right order.
 						//options.async - Cancels `defer`. Parallel loading. Scripts will be executed in order, that they are loaded.
@@ -1017,7 +1012,7 @@ IO:
 								
 							}
 						}
-						//for sane browsers
+							//for sane browsers
 						else {
 							//Add to resource collection
 							Resources.add(src, options)
@@ -1466,7 +1461,7 @@ IO:
 									) //progressback (status, progress, audioElement)
 									return;
 								}
-								//old browsers
+									//old browsers
 								else if (!this.buffered && !(e.total > 0 && ((e.loaded - e.total) >= 0))) {
 									//e.lengthComputable
 									progress(
@@ -1570,7 +1565,7 @@ IO:
 						elem.complete = true
 						onProgress({type: 'load'})
 					}
-					//else start preload
+						//else start preload
 					else if (!elem.duration) {
 						elem.load() // Only IE9+ and Firefox deals correctly with this
 					}
@@ -1591,25 +1586,25 @@ IO:
 				})
 				break;
 
-		    case 'json':
-		    	loadPromise = new Promise(function (loaded, failed, progress) {
-		    		//Defer
-		    		if (options.defer && !options.async) {
-		    			// Add to resource collection and attach handler to be executed in correct order.
-		    			// JSONs has their own sequence, that is not relative to 'js' or 'css' etc.
-		    			Resources.add(src, options, function () {
-		    				isLoaded = true
-		    				loaded(textContent) //callback
-		    			})
-		    		}
-		    		//Async or sync
-		    		else {
-		    			// Add to resource collection
-		    			Resources.add(src, options)
-		    		}
+			case 'json':
+				loadPromise = new Promise(function (loaded, failed, progress) {
+					//Defer
+					if (options.defer && !options.async) {
+						// Add to resource collection and attach handler to be executed in correct order.
+						// JSONs has their own sequence, that is not relative to 'js' or 'css' etc.
+						Resources.add(src, options, function () {
+							isLoaded = true
+							loaded(textContent) //callback
+						})
+					}
+						//Async or sync
+					else {
+						// Add to resource collection
+						Resources.add(src, options)
+					}
 
-		    		//Async or defer or sync
-		    		elem = Core[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
+					//Async or defer or sync
+					elem = Core[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
 						function(result) {
 							try {
 								textContent = Core.JSON.parse(result)
@@ -1630,19 +1625,19 @@ IO:
 						},
 						function (val) { progress(val) }
 					)
-		        },
+				},
 				//on cancel loading
 				function () {
 					if (isLoaded || isCanceled) return;
-				    isCanceled = true
-				    //cancel Promise `requestAsync`
-				    elem && elem.cancel()
-				    //to not break sequence
-				    if (options.defer && !options.async) {
-				    	Resources.notReady(src) //404
-				    }
+					isCanceled = true
+					//cancel Promise `requestAsync`
+					elem && elem.cancel()
+					//to not break sequence
+					if (options.defer && !options.async) {
+						Resources.notReady(src) //404
+					}
 				})
-		    	break;
+				break;
 
 			case 'jsonp':
 				loadPromise = new Promise(function(loaded, failed, progress) {
@@ -1695,7 +1690,7 @@ IO:
 							loaded(textContent) //callback
 						})
 					}
-					//Async or sync
+						//Async or sync
 					else {
 						// Add to resource collection
 						Resources.add(src, options)
@@ -1756,7 +1751,7 @@ IO:
 	
 
 
-										/* Module constructor */
+	/* Module constructor */
 
 	Module = function(moduleName, moduleBody) {
 		this.body = moduleBody
@@ -1775,7 +1770,7 @@ IO:
 			if (module.body.css) {
 				module.style = Util.injectCSS(module.body.css, { 'data-module': module.name })
 			}
-
+			
 			//if has initialization function
 			if (typeof module.body.init === 'function') {
 				try {
@@ -1783,7 +1778,7 @@ IO:
 					module.initiated = true //switch initiated status
 				} catch (err) {
 					//remove styles back 
-					document.head.removeChild(module.style)
+					module.style && document.head.removeChild(module.style)
 					module.style = null
 					Util.fixError(err) //implement err.line
 					module.promise = new Promise().cancel().then(null, function() { return err }) //return rejected promise
@@ -1831,13 +1826,12 @@ IO:
 
 
 
-										/* Sandbox constructor */
+	/* Sandbox constructor */
 	//Creates new sandbox instance
 	Sandbox = function(moduleName) {
 		this.template = Templater(this)//pass new sandbox as a context
 		this.moduleName = moduleName
 		this.moduleUrl = '.'
-		this.root = (document && moduleName && document.querySelector('[data-module="' + moduleName + '"]')) || document || null
 	}
 
 	Sandbox.prototype.hasFeature = function(featureName) {
@@ -1858,7 +1852,7 @@ IO:
 
 	Sandbox.prototype.Promise = Promise
 
-	//>Attaches Core event listeners in runtime. This is an alternative way to add listener of Core events. These events are removed, when module will be destroied, so they may be used in `init()`.
+	//alternative way to add listener of core events. These events are removed on every stopping of Module, so they may be used in init()
 	Sandbox.prototype.listen = function(eventType, handler) {
 		if (eventType && handler && ModulesRegistry[this.moduleName]) {
 			ModulesRegistry[this.moduleName].body.runtime_listen || (ModulesRegistry[this.moduleName].body.runtime_listen = {})
@@ -1872,7 +1866,7 @@ IO:
 	//Generates action in Core with attached details.
 	Sandbox.prototype.action = function(actionType, detail) {
 		if (actionType && (actionType in Actions)) {
-			detail = detail || {}
+			detail = (detail && typeof detail === 'object') ? detail : {}
 			var i = 0, func;
 			while (func = Actions[actionType][i++])
 				func(detail, {
@@ -1899,7 +1893,7 @@ IO:
 	
 
 
-										/* Templater factory */
+	/* Templater factory */
 	
 	var Templater = function (sandbox) {
 		var context = sandbox || {}; //context is a module sandbox
@@ -1927,7 +1921,7 @@ IO:
 
 	Core.template = Templater()
 
-	//>Ads new templating rule for Core.template() call
+	//Ads new templating rule for Core.template() call
 	Core.addTemplateRule = function(regexp, result) {
 		TemplateRules.push({regexp: regexp,	result: result})
 	}
@@ -1936,9 +1930,9 @@ IO:
 	Core.addTemplateRule(/{baseUrl}/gi, function () { return Core.config.baseUrl })
 	//DOM
 	Core.addTemplateRule(/{location:protocol}/g, location.protocol)
-	Core.addTemplateRule(/{location:search}/g, function() { return location.search.substr(1) })
-	Core.addTemplateRule(/{location:url}/g, function() { return location.protocol + '//' + location.host + location.pathname })
-	Core.addTemplateRule(/{location:hash}/g, function() { return location.hash.substr(1) })
+	Core.addTemplateRule(/{location:search}/g, function() { return location.search ? location.search.substr(1) : '' })
+	Core.addTemplateRule(/{location:url}/g, function() { return location.protocol ? (location.protocol + '//' + location.host + location.pathname) : '' })
+	Core.addTemplateRule(/{location:hash}/g, function() { return location.hash ? location.hash.substr(1) : '' })
 
 
 	
@@ -1948,7 +1942,7 @@ IO:
 
 
 
-										/*Utility Functions*/
+	/*Utility Functions*/
 	
 	var Util = Core.Util = {} //private utilities
 		
@@ -2362,7 +2356,7 @@ IO:
 
 	// Error handler
 	Core.error = function(/*arguments*/) {
-		var i = 0, msg, Err = '';
+		var i = 0, msg, Err = [];
 
 		//join all messages and error objects from arguments to one string
 		while (msg = arguments[i++]) {
@@ -2376,15 +2370,15 @@ IO:
 	Core.config = {
 		//Default home URL
 		baseUrl: location.href ? (location.protocol + '//' + location.host + location.pathname.substr(0, location.pathname.lastIndexOf('/'))) : '',
-		cache: false, //Enables default browser's http cache
-		cacheImages: false, //Enables cacheing for image resources. Ignored if `cache` is false
-		cacheMedia: false //Enables cacheing for media resources. Ignored if `cache` is false
+		cache: false, //browser default http cache
+		cacheImages: false, //cache image resources. Ignored if `cache` is false
+		cacheMedia: false //cache media resources. Ignored if `cache` is false
 	}
 	
 	// Send global events
 	Core.invoke = function(eventType, detail) {
 		if (!eventType) return;
-		detail = detail || {}
+		detail = (detail && typeof detail === 'object') ? detail : {}
 		var i, n, handler;
 		
 		//find handlers in Core listeners collection
@@ -2413,7 +2407,7 @@ IO:
 						Core.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + ':' + err.line + ']', err)
 					}
 				}
-				//array of functions
+					//array of functions
 				else if (ModulesRegistry[i].body.listen[eventType].length) {
 					n = 0;
 					while (handler = ModulesRegistry[i].body.listen[eventType][n++]) {
@@ -2529,7 +2523,7 @@ IO:
 
 
 
-											/*Core public interface */
+	/*Core public interface */
 	//Method for extending Core.config object. Old values will be overwritten with new ones
 	Core.configure = function(config) {
 		if (!config) return
@@ -2542,7 +2536,7 @@ IO:
 				Util.merge(Core.config, config)
 			}
 		}
-		//if argument is config object
+			//if argument is config object
 		else {
 			Util.merge(Core.config, config)
 		}
@@ -2588,26 +2582,28 @@ IO:
 	}
 
 	Core.register = function(moduleName, moduleBody) {
-		var sandbox;
+		var sandbox, isModule;
 		//`moduleBody` may be object or function-constructor that returns object.
 		if (typeof moduleBody === 'function') {
 			//attach sandbox to module
 			sandbox = new Sandbox(moduleName)
 			moduleBody = new moduleBody(sandbox) //returns object {init: ..., destroy: ..., listen: ...} or undefined
 		}
-		if (moduleBody) {
+		//little optimization
+		isModule = ('css' in moduleBody) || ('init' in moduleBody) || ('destroy' in moduleBody) || ('listen' in moduleBody)
+		if (isModule) {
 			//if module has is an object, register it
 			ModulesRegistry[moduleName] = new Module(moduleName, moduleBody)
 			ModulesRegistry[moduleName].sandbox = sandbox
 			lastRegisteredModuleName = moduleName
 		}
 		//else cancel registration
-
 		return this;
 	}
 
-	Core.start = function(moduleName/*,args*/) {
+	Core.start = function(/*args*/) {
 		var module,
+			moduleName,
 			length = arguments.length,
 			i = 0,
 			Proms = []; //Promises collection
@@ -2626,8 +2622,9 @@ IO:
 		);
 	}
 	
-	Core.stop = function(moduleName/*,args*/) {
+	Core.stop = function(/*args*/) {
 		var module,
+			moduleName,
 			length = arguments.length,
 			i = 0,
 			Proms = []; //Promises collection

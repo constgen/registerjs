@@ -233,22 +233,22 @@ var Core = {};
 			randomize: function(url) { //returns URL
 				/// <signature>
 				/// <summary>Adds a parameter with random value, if not exists.</summary>
-				/// <param name="url" type="String">URL or path string</param>
-				/// <returns type="String">Updated URL</returns>
+				/// <param name="url" type="String">URL or path string.</param>
+				/// <returns type="String">Updated URL.</returns>
 				/// </signature>
 			},
 			isExternal: function(url) {
 				/// <signature>
 				/// <summary>Checks if URL is not in the same domain.</summary>
-				/// <param name="url" type="String">URL or path string</param>
-				/// <returns type="Boolean">true or false</returns>
+				/// <param name="url" type="String">URL or path string.</param>
+				/// <returns type="Boolean">true or false.</returns>
 				/// </signature>
 			},
 			isAvailable: function(url) { //returns Boolean
 				/// <signature>
 				/// <summary>Synchronously checks file by url for existence/availability.</summary>
-				/// <param name="url" type="String">URL or path string</param>
-				/// <returns type="Boolean">true or false</returns>
+				/// <param name="url" type="String">URL or path string.</param>
+				/// <returns type="Boolean">true or false.</returns>
 				/// </signature>
 			},
 			isAvailableAsync: function(url) {
@@ -261,15 +261,15 @@ var Core = {};
 			normalize: function(url) {
 				/// <signature>
 				/// <summary>Normalizes paths</summary>
-				/// <param name="url" type="String">URL or path string</param>
-				/// <returns type="String">Valid URL</returns>
+				/// <param name="url" type="String">URL or path string.</param>
+				/// <returns type="String">Valid URL.</returns>
 				/// </signature>
 			}
 		},
 		request: function(url, error) {
 			/// <summary>Synchronous request for text content of any file.</summary>
 			/// <param name="url" type="String">Path to file.</param>
-			/// <param name="error" type="Function" optional="true">Error handler</param>
+			/// <param name="error" type="Function" optional="true">Error handler.</param>
 			/// <returns type="String">Result of request.</returns>
 		},
 		requestSync: function(url) {
@@ -427,15 +427,13 @@ var Core = {};
 	PrivateCore.extend = PublicCore.extend
 
 	var Sandbox = function(moduleName) {
-		/// <summary>Creates new sandbox instance, that may serve some module</summary>
-		/// <param name="moduleName" type="String" optional="true">Context module name</param>
+		/// <summary>Creates new sandbox instance, that may serve some module.</summary>
+		/// <param name="moduleName" type="String" optional="true">Context module name.</param>
 		/// <returns type="Object">Sandbox instance.</returns>
-		/// <field name='template' type='Function'>Template function with a current sandbox as a context.</field>
-		/// <field name='moduleName' type='String'>Sandbox context module name</field>
-		/// <field name='moduleUrl' type='String'>Sandbox context module URL</field>
-		/// <field name='root' type='HTMLElement' elementMayBeNull="true">Root DOM element for context module</field>
-		/// <field name='template' type='Function'>static field desc.</field>
-		/// <field name='Promise' static='true' type='Function'>Alias for `Core.Promise`</field>
+		/// <field name='moduleName' type='String'>Sandbox context module name.</field>
+		/// <field name='moduleUrl' type='String'>Sandbox context module URL.</field>
+		/// <field name='template' type='Function'>String variables processing in context of sandbox.</field>
+		/// <field name='Promise' static='true' type='Function'>Alias to `Core.Promise`.</field>
 		this.template = Templater(this)
 	}
 
@@ -446,7 +444,7 @@ var Core = {};
 	}
 
 	Sandbox.prototype.load = function(url) {
-		/// <summary>Alias for `Core.load(url, options)`, but with additional context templating rules for URLs</summary>
+		/// <summary>Alias to `Core.load(url, options)`, but with additional context templating rules for URLs.</summary>
 		/// <returns type="Promise">Result of resource load.</returns>
 	}
 
@@ -523,7 +521,19 @@ var Core = {};
 				return !(item.value && item.value.toString && /\[native\scode\]/.test(item.value.toString()));
 			})
 		}
+
+		//filter unnecessary properties in `sandbox` instance object
+		else if (e.targetName === 'sandbox' && e.items.some(function(el) {return el.name == 'moduleName' })) {
+			e.items = e.items.filter(function(item) {
+				return !(
+					(item.value && item.value.toString && /\[native\scode\]/.test(item.value.toString()))
+					|| item.name === 'constructor'
+				)
+			})
+		}
+
 	})
+
 
 	//intellisense.addEventListener('statementcompletion', function(e) {
 	//	intellisense.logMessage(e.target ? 'member list requested, target: ' + e.targetName : 'statement completion for current scope requested')
