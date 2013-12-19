@@ -9,7 +9,7 @@ var Core = {};
 (function() {
 	var undefined;
 
-	//Misterious `_$createEventManager` function, that was found in VS Reference sources. It does magic for function parameters reference.
+	//Mysterious `_$createEventManager` function, that was found in VS Reference sources. It does magic for function parameters reference.
 	var _eventManager = _$createEventManager(function () {
 		return {}
 	})
