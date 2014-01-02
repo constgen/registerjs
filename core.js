@@ -1,5 +1,5 @@
 ﻿/*
-Version 3.3.6
+Version 3.3.7
 Compatable with: NodeJS, AMD.
 
 IO:
@@ -21,7 +21,7 @@ IO:
 		location = window.location,
 
 		/*internal*/
-		Core = {version: '3.3.6'}, // Application Core
+		Core = {version: '3.3.7'}, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
@@ -31,12 +31,13 @@ IO:
 		Actions = {}, //Collection of sandboxes actions handlers
 		TemplateRules = [], //common templating rules
 		SandboxTemplateRules = [], //module templating rules
-		lastRegisteredModuleName = '',
+		lastRegisteredModuleName,
 		requestAnimationFrame,
 		cancelAnimationFrame,
 
 		/*shortcuts*/
-		noop = function() { },
+		noop = function () { },
+		httpProtocol = (location.protocol) == 'https:' ? 'https:' : 'http:',
 		setTimeout_1 = function(func) { return setTimeout(func, 1) },
 		setTimeout_10 = function(func) { return setTimeout(func, 10) },
 		setInterval_15 = function(func) { return setInterval(func, 15) };
@@ -203,8 +204,8 @@ IO:
 			setImmediate = global.setImmediate || (global.msClearImmediate && global.msSetImmediate) /*IE10*/ || function (callback) {
 				return setTimeout(callback, 1) //emulation
 			},
-			clearImmediate = global.clearImmediate || global.msClearImmediate /*IE10*/ || function (callback) {
-				return clearTimeout(callback, 1) //emulation
+			clearImmediate = global.clearImmediate || global.msClearImmediate /*IE10*/ || function (id) {
+				return clearTimeout(id) //emulation
 			};
 
 		Deferred = function (canceler) {
@@ -405,13 +406,11 @@ IO:
 		}
 		//Current promise can't be resolved until passed promise will resolve. If passed promise will fail, current promise also will fail with that error
 		Deferred.prototype.and = function (anotherPromise) {
-			return this.then(
-				function (val) {//done
-					return Promise(anotherPromise).then(
-						function () { return val }, //success
-						function (err) { return err }) //switch to error state with this error
-				}
-			)
+			return this.then(function (val) {//done
+				return Promise(anotherPromise).then(
+					function () { return val }, //success
+					function (err) { return err }) //switch to error state with this error
+			})
 		}
 
 		// Polymorph Promise constructor.
@@ -776,7 +775,7 @@ IO:
 
 
 
-	/* Loader 1.8 */
+	/* Loader 1.81 */
 	//help for dev http://pieisgood.org/test/script-link-events/ 
 	Core.load = function(src, options) {
 		options || (options = {})
@@ -832,12 +831,14 @@ IO:
 			src = Core.URL.randomize(src)
 		}
 
+		src = Core.template(src)  //process url variables
+		src = Core.URL.normalize(src)
+
 		//prevent double resource loading
 		if (!options.reload && (src in Resources.urls)) {
 			return Resources.urls[src].promise;
 		}
 		
-		src = Core.template(src)  //process url variables
 		n = src.split('?')[0].lastIndexOf('.')
 		if (n == -1 && !options.type) {
 			return Promise();
@@ -1058,7 +1059,7 @@ IO:
 
 						//Add to resource collection
 						Resources.add(src, options)
-						Core.requestSync(src).then(
+						Util.requestSync(src).then(
 							function(textContent) {
 								isLoaded = true
 								elem.setAttribute('data-src', src)
@@ -1271,7 +1272,7 @@ IO:
 					else {
 						//Add to resource collection
 						Resources.add(src, options)
-						Core.requestSync(src).then(
+						Util.requestSync(src).then(
 							function(textContent) {
 								textContent = Util.relocateCSS(textContent, src, location.href)//fix all URLs
 								elem = Util.injectCSS(textContent, { 'data-src': src, 'media': options.media })
@@ -1604,7 +1605,7 @@ IO:
 					}
 
 					//Async or defer or sync
-					elem = Core[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
+					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
 						function(result) {
 							try {
 								textContent = Core.JSON.parse(result)
@@ -1697,7 +1698,7 @@ IO:
 					}
 
 					//Async or defer or sync
-					elem = Core[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
+					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
 						function(result) {
 							try {
 								//process variables in text if resorce defined as a text file
@@ -1830,7 +1831,7 @@ IO:
 	//Creates new sandbox instance
 	Sandbox = function(moduleName) {
 		this.template = Templater(this)//pass new sandbox as a context
-		this.moduleName = moduleName
+		this.moduleName = moduleName || ''
 		this.moduleUrl = '.'
 	}
 
@@ -1854,11 +1855,11 @@ IO:
 
 	//alternative way to add listener of core events. These events are removed on every stopping of Module, so they may be used in init()
 	Sandbox.prototype.listen = function(eventType, handler) {
-		if (eventType && handler && ModulesRegistry[this.moduleName]) {
-			ModulesRegistry[this.moduleName].body.runtime_listen || (ModulesRegistry[this.moduleName].body.runtime_listen = {})
-			var listener = ModulesRegistry[this.moduleName].body.runtime_listen[eventType] || [];
+		if (eventType && handler && this.moduleName && ModulesRegistry[this.moduleName]) {
+			ModulesRegistry[this.moduleName].runtime_listen || (ModulesRegistry[this.moduleName].runtime_listen = {})
+			var listener = ModulesRegistry[this.moduleName].runtime_listen[eventType] || [];
 			listener = (listener instanceof Array) ? listener.concat(handler) : [listener].concat(handler)
-			ModulesRegistry[this.moduleName].body.runtime_listen[eventType] = listener
+			ModulesRegistry[this.moduleName].runtime_listen[eventType] = listener
 		}
 		return this;  // return Sandbox object
 	}
@@ -1886,7 +1887,7 @@ IO:
 
 	//module templating rules
 	Sandbox.addTemplateRule(/{module:url}/g, function (context) { return context.moduleUrl })
-	Sandbox.addTemplateRule(/{module:name}/g, function (context) { return context.moduleName })
+	Sandbox.addTemplateRule(/{module:name}/g, function(context) { return context.moduleName })
 	//Sandbox.addTemplateRule(/{data:.+}/g, function (context) { return ModulesRegistry[context.moduleName] ? (ModulesRegistry[context.moduleName].body.data || '') : undefined })
 
 
@@ -1900,21 +1901,28 @@ IO:
 
 		return function (string) {
 			if (!(typeof string == 'string' || string instanceof String)) return '';
-			var	parseRule = function (rule) {
+			var i, rule,
+				parseRule = function (rule) {
 				var regexp = rule.regexp,
-					result;
-				if (typeof rule.result === 'function') {
-					result = rule.result(context)
-				}
+					result = (typeof rule.result === 'function') ? rule.result(context) : rule.result;
+
 				if (result !== undefined && result !== null) {
 					string = string.replace(regexp, result)
 				}
 			};
 			//parse context rules first
-			sandbox && SandboxTemplateRules.forEach(parseRule)
+			if (sandbox) {
+				i = SandboxTemplateRules.length
+				while (rule = SandboxTemplateRules[i-=1]) {
+					parseRule(rule)
+				}
+			}
 			//then common rules
-			TemplateRules.forEach(parseRule)
-
+			i = TemplateRules.length - 1
+			while (rule = TemplateRules[i-=1]) {
+				parseRule(rule)
+			}
+			
 			return string; //return new string
 		}
 	}
@@ -2043,8 +2051,8 @@ IO:
 		return err;
 	}
 
-	//Request for text content of any file. Used for internal tasks
-	Util.requestTextContent = function(url, isAsync) {
+	//Request for text content of any file. Used for internal tasks.
+	Util._requestTextContent = function(url, isAsync) {
 		return new Promise(function (complete, error) {
 			var xhr = new Util.XHR;
 			url = Core.template(url)
@@ -2073,6 +2081,25 @@ IO:
 		})
 	}
 
+	// Oldschool request
+	Util.request = function (url, error) {
+		var response;
+		Util._requestTextContent(url, false).then(
+			function (r) { response = r },
+			function (e) { error(e) }
+		)
+		return response || ' ';
+	}
+	// Synchronous request
+	Util.requestSync = function (url) { //returns Promise
+		return Util._requestTextContent(url, false)
+	}
+	// Asynchronous request
+	Util.requestAsync = function (url) { //returns Promise
+		return Util._requestTextContent(url, true)
+	}
+
+
 	//Evaluate JavaScript expression in closed function scope. `var` and `return` statements are not allowed
 	Util.execute = function(expression) {  //returns result
 		return (new Function('return (' + expression + ')'))();
@@ -2080,7 +2107,7 @@ IO:
 
 	//Call function asynchronously or not
 	Util.asyncCall = function(isAsync, func) {
-		return isAsync ? setTimeout_1(func) : (undefined, func())
+		return isAsync ? setTimeout_1(func) : (func(), undefined)
 	}
 
 	//Recursively merges one object to another
@@ -2117,10 +2144,10 @@ IO:
 		newCssLocation = Core.URL.normalize(newCssLocation)
 
 		//fix paths
-		if (/(\.css|\.html|\.xhtml|\.jsp|\.asp|\.aspx\.php)$/.test(oldCssLocation)) {
+		if (/(\.[a-z0-9]+)$/i.test(oldCssLocation)) {
 			oldCssLocation = oldCssLocation.substr(0, oldCssLocation.lastIndexOf('/'))
 		}
-		if (/(\.css|\.html|\.xhtml|\.jsp|\.asp|\.aspx\.php)$/.test(newCssLocation)) {
+		if (/(\.[a-z0-9]+)$/i.test(newCssLocation)) {
 			newCssLocation = newCssLocation.substr(0, newCssLocation.lastIndexOf('/'))
 		}
 
@@ -2289,7 +2316,7 @@ IO:
 	Core.URL.normalize = function (url) {
 		if (!url) return '';
 		url = url.trim()
-		url = url.replace(/^\/\//g, location.protocol + '//')//insert protocol
+		url = url.replace(/^\/\//g, httpProtocol + '//')//protocol autocomplete
 		url = url.replace(/\\/g, '/')//normalize slashes 
 		url = url.replace(/^.\//, '')//remove first relative mark
 		url = url.replace(/\/+$/, '')//remove last slash
@@ -2328,24 +2355,6 @@ IO:
 		}(value))
 	}
 
-
-	// Oldschool request
-	Core.request = function(url, error) {
-		var response;
-		Util.requestTextContent(url, false).then(
-			function (r) { response = r },
-			function (e) { error(e) }
-		)
-		return response || ' ';
-	}
-	// Synchronous request
-	Core.requestSync = function(url) { //returns Promise
-		return Util.requestTextContent(url, false)
-	}
-	// Asynchronous request
-	Core.requestAsync = function(url) { //returns Promise
-		return Util.requestTextContent(url, true)
-	}
 
 
 	
@@ -2531,7 +2540,7 @@ IO:
 
 		//if argument is config file url
 		if (url && Core.URL.isAvailable(url)) {
-			config = Util.execute(Core.request(url))
+			config = Util.execute(Util.request(url))
 			if (config) {
 				Util.merge(Core.config, config)
 			}
@@ -2570,9 +2579,11 @@ IO:
 		}
 
 		//js
-		Proms.push(Core.load(path + '/register.js', 'defer reload').then(function() {
+		Proms.push(Core.load(path + '/register.js', 'defer reload').then(function () {
+			if (!lastRegisteredModuleName) return;
 			var module = ModulesRegistry[lastRegisteredModuleName]
-			module.url = module.moduleUrl = path
+			module.url = module.sandbox.moduleUrl = path
+			lastRegisteredModuleName = undefined
 		}))
 
 		//add to Includes collection
@@ -2582,17 +2593,15 @@ IO:
 	}
 
 	Core.register = function(moduleName, moduleBody) {
-		var sandbox, isModule;
+		var sandbox;
 		//`moduleBody` may be object or function-constructor that returns object.
 		if (typeof moduleBody === 'function') {
 			//attach sandbox to module
 			sandbox = new Sandbox(moduleName)
 			moduleBody = new moduleBody(sandbox) //returns object {init: ..., destroy: ..., listen: ...} or undefined
 		}
-		//little optimization
-		isModule = ('css' in moduleBody) || ('init' in moduleBody) || ('destroy' in moduleBody) || ('listen' in moduleBody)
-		if (isModule) {
-			//if module has is an object, register it
+		if (typeof moduleBody === 'object' && moduleBody) {
+			//if module is an object, register it
 			ModulesRegistry[moduleName] = new Module(moduleName, moduleBody)
 			ModulesRegistry[moduleName].sandbox = sandbox
 			lastRegisteredModuleName = moduleName
@@ -2670,7 +2679,7 @@ IO:
 
 		for (i in obj) {
 			if (i in Core) {
-				if (/^register|start|stop|extend|invoke|load|template$/.test(i)) {
+				if (/^(register|start|stop|startAll|stopAll|extend|invoke|listen|actionload|template)$/.test(i)) {
 					Core.error('"' + i + '" feature is not extendable')
 					continue
 				}
