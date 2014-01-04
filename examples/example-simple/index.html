@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+	<title>Example - simple</title>
+	<meta charset="utf-8">
+
+	<link href="css/common.css" rel="stylesheet">
+
+	<script src="core/core.js"></script>
+	<script>Core.configure('config.js')</script>
+</head>
+<body>
+	<div id="wrapper">
+		<!--HEADER-->
+		<script>Core.include('modules/header')</script>
+		<article>
+			<h1>Test article</h1>
+			<p>Example text</p>
+		</article>
+	</div>
+	<!--FOOTER-->
+	<script>Core.include('modules/footer')</script>
+
+	<script>
+		Core.load([
+			'libs/jquery.js',
+			'libs/knockout.js',
+		], 'defer')
+
+		Core.DOMReady.then(Core.startAll)
+	</script>
+</body>
+</html>

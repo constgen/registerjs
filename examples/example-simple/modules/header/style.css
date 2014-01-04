@@ -1,0 +1,20 @@
+﻿@charset "utf-8";
+
+
+.header
+{
+	position: relative;
+	height: 100px;
+	background: #ccc;
+	text-align: center;
+	line-height: 100px;
+}
+
+.header .logo
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width:auto;
+	height: auto; 
+}

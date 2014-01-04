@@ -1,0 +1,11 @@
+﻿@charset "utf-8";
+
+
+.footer
+{
+	height: 50px;
+	margin-top: -50px;
+	background: #ccc;
+	text-align: center;
+	line-height: 50px;
+}
