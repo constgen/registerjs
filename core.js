@@ -1,5 +1,5 @@
 ﻿/*
-Version 3.3.7
+Version 3.3.8
 Compatable with: NodeJS, AMD.
 
 IO:
@@ -8,11 +8,10 @@ IO:
 		app-load
 		layout-update
 */
-
-; (function (browserWindow, nodeGlobal) {
+(function (browserWindow, nodeGlobal) {
 	'use strict';
 	
-	if (browserWindow && browserWindow.Core) return
+	if (browserWindow && browserWindow.Core) return;
 	
 	var undefined,
 		global = browserWindow || nodeGlobal,
@@ -21,7 +20,7 @@ IO:
 		location = window.location,
 
 		/*internal*/
-		Core = {version: '3.3.7'}, // Application Core
+		Core = {version: '3.3.8'}, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
@@ -40,7 +39,17 @@ IO:
 		httpProtocol = (location.protocol) == 'https:' ? 'https:' : 'http:',
 		setTimeout_1 = function(func) { return setTimeout(func, 1) },
 		setTimeout_10 = function(func) { return setTimeout(func, 10) },
-		setInterval_15 = function(func) { return setInterval(func, 15) };
+		setInterval_15 = function (func) { return setInterval(func, 15) },
+		isOldIE = '\v'=='v', //!-[1,] 
+			
+		/*often used*/
+		lowerThanWebkitVersion = function (version) {
+			if (!navigator.userAgent) return false;
+			var match = /(webkit)[\/]([\w.]+)/i.exec(navigator.userAgent);
+			//check version of webkit
+			if (match && match[2]) return (parseFloat(match[2], 10) <= version);
+			return false;
+		};
 	
 
 
@@ -214,7 +223,7 @@ IO:
 			this.isRejected = false
 			this.result = []//arguments array
 			this.Callbacks = []
-			this.newPromise
+			this.newPromise =
 			//Deferred may serve Promise or not
 			this.promise = undefined
 		}
@@ -902,14 +911,7 @@ IO:
 					failed = failed.bind(null, new Error('Error 404: Script \'' + src + '\' not found'))
 
 					//old webkit (v534.13 and lower) has no execution order for dinamicly created scripts
-					var isBrokenOrderBrowser = (function() {
-						var match;
-						if (!navigator.userAgent) return false;
-						match = /(webkit)[\/]([\w.]+)/i.exec(navigator.userAgent)
-						//check version of webkit
-						if (match && match[2]) return (parseFloat(match[2], 10) <= 534.13);
-						return false;
-					}()),
+					var isBrokenOrderBrowser = lowerThanWebkitVersion(534.13),
 						//Opera, that do not support 'defer' and 'async', and always loads scripts synchronously
 						isOldOpera = !!(window.opera && Object.prototype.toString.call(window.opera) == "[object Opera]" && !('async' in elem)),
 						len, script;
@@ -968,7 +970,7 @@ IO:
 						//options.async - Cancels `defer`. Parallel loading. Scripts will be executed in order, that they are loaded.
 
 						//for old IE < 10
-						if (!-[1, ] || (document.documentMode && document.documentMode <= 9)) {
+						if (isOldIE || (document.documentMode && document.documentMode <= 9)) {
 							if (options.async) {
 								//Add to resource collection
 								Resources.add(src, options)
@@ -1140,7 +1142,11 @@ IO:
 						//some browsers don't support 'onload' & 'onerror'
 						var isOnloadNotSupported = (elem.onload !== null),
 							//Browsers that do nothing. It is Safari
-							isBrokenBrowser = (Object.prototype.toString.call(window.HTMLElement).indexOf('Constructor') > 0) || (/android|silk/.test(navigator.userAgent.toLowerCase() || navigator.vendor.toLowerCase())),
+							isBrokenBrowser = (
+								Object.prototype.toString.call(window.HTMLElement).indexOf('Constructor') > 0) //safari
+								|| (/android|chrome|silk/.test(navigator.userAgent.toLowerCase() || navigator.vendor.toLowerCase()) //mobile
+								|| lowerThanWebkitVersion(534.51) //old webkit (v534.51 and lower) never executes `onload`
+							),
 							//Opera just do nothing when 404
 							isOnerrorNotSupported = (window.opera && Object.prototype.toString.call(window.opera) == "[object Opera]"),
 							//IE trigers 'onload' even when 404
@@ -1530,7 +1536,7 @@ IO:
 							Util.removeDOMEvent(elem, 'cancel', onAbort)
 							Util.removeDOMEvent(elem, 'abort', onAbort)
 						}
-						delete this.cleanHandlers
+						this.cleanHandlers = undefined
 					}
 
 					//crazyness for IE10- and Blink 30-
@@ -1648,19 +1654,19 @@ IO:
 					if (!/(\?|\&)callback=/.test(src)) {
 						src += (src.indexOf('?') === -1 ? '?' : '&') + 'callback=' + callbackName
 					} else {
-						match = /callback=((.+)&|(.+)$)/.exec(src)
+						match = /callback=((.+?)&|(.+?)$)/.exec(src)
 						callbackName = match[2] || match[3]
 					}
 					//save `callbacName` in outer scope
 					textContent = callbackName
 					window[callbackName] = function(/*data*/) {
-						delete window[callbackName]
+						window[callbackName] = undefined
 						isLoaded = true
 						loaded.apply(null, arguments)//callback
 					}
 					options.type = 'script'
 					elem = Core.load(src, options).then(null, function(err) {
-						delete window[callbackName]
+						window[callbackName] = undefined
 						isCanceled = true
 						failed(err) //errback
 					}, progress)
@@ -1672,7 +1678,7 @@ IO:
 					//cancel Promise
 					elem && elem.cancel()
 					//destroy handler
-					delete window[textContent]
+					window[textContent] = undefined
 				})
 				break;
 
@@ -2564,7 +2570,7 @@ IO:
 
 		//css
 		Proms.push(Core.load(path + '/style.css', 'defer'))
-		if (!-[1, ]) { //always for IE <=8
+		if (isOldIE) { //always for IE <=8
 			Proms.push(Core.load(path + '/ie.css', 'defer'))
 		}
 
