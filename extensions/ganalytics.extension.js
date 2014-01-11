@@ -7,7 +7,7 @@ Core.extend(function (Core) {
 	window._gaq = window._gaq || [];
 
 	var undefined,
-		userAccount = 'UA-829072-21', //!!!
+		userAccount = Core.config.googleAnalyticsAccount || 'UA-123456-78', //!!!
 		_gaq = window._gaq;
 
 	window._gaq.push(['_setAccount', userAccount])
