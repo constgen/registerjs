@@ -17,6 +17,9 @@
 		<a href="//github.com/cgenchevsky/registerjs/wiki/Quick-start-RUS">Quick start.</a>
 	</li>
 	<li>
+		<a href="//github.com/cgenchevsky/registerjs/wiki/Events-and-Actions-RUS">Events and Actions.</a>
+	</li>
+	<li>
 		<a href="//github.com/cgenchevsky/registerjs/wiki/Core-Reference-RUS">Core Reference.</a>
 	</li>
 	<li>
