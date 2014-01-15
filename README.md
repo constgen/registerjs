@@ -8,27 +8,4 @@
 Стартуй - <a href="//github.com/cgenchevsky/registerjs/wiki/Core-Reference-RUS#wiki-core_startall"><code>Core.startAll()</code></a>.
 
 
-<h2>Детальное описание на русском</h2>
-<ol>
-	<li>
-		<a href="//github.com/cgenchevsky/registerjs/wiki/Intro">Intro.</a>
-	</li>
-	<li>
-		<a href="//github.com/cgenchevsky/registerjs/wiki/Quick-start-RUS">Quick start.</a>
-	</li>
-	<li>
-		<a href="//github.com/cgenchevsky/registerjs/wiki/Events-and-Actions-RUS">Events and Actions.</a>
-	</li>
-	<li>
-		<a href="//github.com/cgenchevsky/registerjs/wiki/Core-Reference-RUS">Core Reference.</a>
-	</li>
-	<li>
-		<a href="//github.com/cgenchevsky/registerjs/wiki/Module-Reference-RUS">Module Reference.</a>
-	</li>
-	<li>
-		<a href="//github.com/cgenchevsky/registerjs/wiki/Sandbox-Reference-RUS">Sandbox Reference.</a>
-	</li>
-	<li>
-		<a href="//github.com/cgenchevsky/registerjs/wiki/Outro">Outro.</a>
-	</li>
-</ol>
+<h4>Детальное описание смотрите в разделах <a href="//github.com/cgenchevsky/registerjs/wiki" target="_blank">Wiki</a></h4>
