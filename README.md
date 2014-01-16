@@ -7,5 +7,6 @@
 Связывай через <a href="//github.com/cgenchevsky/registerjs/wiki/Core-Reference-RUS#wiki-core_invoke"><code>Core.invoke()</code></a> и <a href="//github.com/cgenchevsky/registerjs/wiki/Sandbox-Reference-RUS#wiki-sandbox_action"><code>sandbox.action()</code></a>. 
 Стартуй - <a href="//github.com/cgenchevsky/registerjs/wiki/Core-Reference-RUS#wiki-core_startall"><code>Core.startAll()</code></a>.
 
+<p>Работает в IE 6+, Firefox 3.5+, Safari 4+, Chrome 4+, Opera 9+, Android Browser 2+, Amazon Silk, Blackberry Browser 6+ и др.</p>
 
 <h4>Детальное описание смотрите в разделах <a href="//github.com/cgenchevsky/registerjs/wiki" target="_blank">Wiki</a></h4>
