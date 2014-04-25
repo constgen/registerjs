@@ -1,6 +1,6 @@
 ﻿/*
-Version 3.3.8
-Compatable with: NodeJS, AMD.
+Version 3.4.3
+Compatible with: NodeJS, AMD.
 
 IO:
 	out:
@@ -8,19 +8,19 @@ IO:
 		app-load
 		layout-update
 */
-(function (browserWindow, nodeGlobal) {
+(function (browserWindow, nodeGlobal, self) {
 	'use strict';
-	
+
 	if (browserWindow && browserWindow.Core) return;
-	
+
 	var undefined,
-		global = browserWindow || nodeGlobal,
+		global = browserWindow || nodeGlobal || self,
 		window = browserWindow || {},
 		document = window.document,
 		location = window.location,
 
 		/*internal*/
-		Core = {version: '3.3.8'}, // Application Core
+		Core = { version: '3.4.2' }, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
@@ -33,29 +33,35 @@ IO:
 		lastRegisteredModuleName,
 		requestAnimationFrame,
 		cancelAnimationFrame,
+		setAsyncTask,
+		clearAsyncTask,
 
 		/*shortcuts*/
 		noop = function () { },
 		httpProtocol = (location.protocol) == 'https:' ? 'https:' : 'http:',
-		setTimeout_1 = function(func) { return setTimeout(func, 1) },
-		setTimeout_10 = function(func) { return setTimeout(func, 10) },
+		setTimeout_1 = function (func) { return setTimeout(func, 1) },
+		setTimeout_10 = function (func) { return setTimeout(func, 10) },
 		setInterval_15 = function (func) { return setInterval(func, 15) },
-		isOldIE = '\v'=='v', //!-[1,] 
-			
+		isOldIE = '\v' == 'v', //!-[1,] 
+		isAMD = !!(typeof define === 'function' && define.amd && document && document.body), //was AMD loader used?
+
 		/*often used*/
 		lowerThanWebkitVersion = function (version) {
 			if (!navigator.userAgent) return false;
 			var match = /(webkit)[\/]([\w.]+)/i.exec(navigator.userAgent);
 			//check version of webkit
-			if (match && match[2]) return (parseFloat(match[2], 10) <= version);
+			if (match && match[2]) return (parseFloat(match[2]) <= version);
 			return false;
+		},
+		errorAsString = function (err) {
+			return (err.message) ? (err.name + ': ' + err.message) : err
 		};
-	
+
 
 
 	/*Fixes, polyfills*/
-	
-	//NodeJS polyfill
+
+	//polyfill for NodeJS
 	if (nodeGlobal) {
 		location = {
 			protocol: '',
@@ -64,31 +70,31 @@ IO:
 		}
 	}
 
-	//document.head polyfill
+	//HTML polyfills
 	if (document) {
-		document.head || (document.head = document.getElementsByTagName && document.getElementsByTagName('head')[0])
+		document.head || (document.head = (document.getElementsByTagName && document.getElementsByTagName('head')[0]) || document.documentElement);
 	}
-	
+
 	// compressed with http://www.refresh-sf.com/yui/
 	// Array forEach
-	[].forEach || (Array.prototype.forEach = function(g, b) { if (this == null) { throw new TypeError("this is null or not defined") } var d, c, e, f = Object(this), a = f.length >>> 0; if ({}.toString.call(g) != "[object Function]") { throw new TypeError(g + " is not a function") } if (b) { d = b } c = 0; while (c < a) { if (c in f) { e = f[c]; g.call(d, e, c, f) } c++ } });
+	[].forEach || (Array.prototype.forEach = function (g, b) { if (this == null) { throw new TypeError("this is null or not defined") } var d, c, e, f = Object(this), a = f.length >>> 0; if ({}.toString.call(g) != "[object Function]") { throw new TypeError(g + " is not a function") } if (b) { d = b } c = 0; while (c < a) { if (c in f) { e = f[c]; g.call(d, e, c, f) } c++ } });
 	// Array map
-	[].map || (Array.prototype.map = function(i, h) { if (this == null) { throw new TypeError("this is null or not defined") } if ({}.toString.call(i) != "[object Function]") { throw new TypeError(i + " is not a function") } var b, a, c, d, g, f = Object(this), e = f.length >>> 0; h && (b = h); a = new Array(e); c = 0; while (c < e) { if (c in f) { d = f[c]; g = i.call(b, d, c, f); a[c] = g } c++ } return a });
+	[].map || (Array.prototype.map = function (i, h) { if (this == null) { throw new TypeError("this is null or not defined") } if ({}.toString.call(i) != "[object Function]") { throw new TypeError(i + " is not a function") } var b, a, c, d, g, f = Object(this), e = f.length >>> 0; h && (b = h); a = new Array(e); c = 0; while (c < e) { if (c in f) { d = f[c]; g = i.call(b, d, c, f); a[c] = g } c++ } return a });
 	// Array filter
-	[].filter || (Array.prototype.filter = function(b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var f = Object(this), a = f.length >>> 0, e = [], d = arguments[1], c, g; for (c = 0; c < a; c++) { if (c in f) { g = f[c]; if (b.call(d, g, c, f)) { e.push(g) } } } return e });
+	[].filter || (Array.prototype.filter = function (b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var f = Object(this), a = f.length >>> 0, e = [], d = arguments[1], c, g; for (c = 0; c < a; c++) { if (c in f) { g = f[c]; if (b.call(d, g, c, f)) { e.push(g) } } } return e });
 	// Array some
-	[].some || (Array.prototype.some = function(b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var e = Object(this), a = e.length >>> 0, d = arguments[1], c; for (c = 0; c < a; c++) { if (c in e && b.call(d, e[c], c, e)) { return true } } return false });
+	[].some || (Array.prototype.some = function (b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var e = Object(this), a = e.length >>> 0, d = arguments[1], c; for (c = 0; c < a; c++) { if (c in e && b.call(d, e[c], c, e)) { return true } } return false });
 	// Array every
-	[].every || (Array.prototype.every || function(b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var e = Object(this), a = e.length >>> 0, d = arguments[1], c; for (c = 0; c < a; c++) { if (c in e && !b.call(d, e[c], c, e)) { return false } } return true });
+	[].every || (Array.prototype.every || function (b) { if (this == null) { throw new TypeError("this is null or not defined") } if (typeof b != "function") { throw new TypeError(b + " is not a function") } var e = Object(this), a = e.length >>> 0, d = arguments[1], c; for (c = 0; c < a; c++) { if (c in e && !b.call(d, e[c], c, e)) { return false } } return true });
 	// Function bind
-	(function(){}).bind || (Function.prototype.bind = function(a) { if (typeof this !== "function") { throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable") } var e = Array.prototype.slice.call(arguments, 1), d = this, b = function() { }, c = function() { return d.apply(this instanceof b && a ? this : a, e.concat(Array.prototype.slice.call(arguments))) }; b.prototype = this.prototype; c.prototype = new b(); return c });
+	(function () { }).bind || (Function.prototype.bind = function (a) { if (typeof this !== "function") { throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable") } var e = Array.prototype.slice.call(arguments, 1), d = this, b = function () { }, c = function () { return d.apply(this instanceof b && a ? this : a, e.concat(Array.prototype.slice.call(arguments))) }; b.prototype = this.prototype; c.prototype = new b(); return c });
 	//Object create
 	Object.create = Object.create || (function () { function F() { } return function (o) { if (arguments.length != 1) { throw new Error("Object.create implementation only accepts one parameter.") } F.prototype = o; return new F() } }());
 	//String trim
-	''.trim || (String.prototype.trim = function() { return this.replace(/^[\s\uFEFF\u00A0]+|[\s\uFEFF\u00A0]+$/g, '') });
-	
+	''.trim || (String.prototype.trim = function () { return this.replace(/^[\s\uFEFF\u00A0]+|[\s\uFEFF\u00A0]+$/g, '') });
+
 	//internal `requestAnimationFrame`
-	(function() {
+	(function () {
 		var lastTime = 0,
 			vendors = ['webkit', 'moz', 'ms'],
 			x;
@@ -98,18 +104,231 @@ IO:
 		}
 
 		if (!requestAnimationFrame) {
-			requestAnimationFrame = function(callback) {
+			requestAnimationFrame = function (callback) {
 				var currTime = new Date().getTime(),
 					timeToCall = Math.max(0, 16 - (currTime - lastTime)),
-					id = window.setTimeout(function() { callback(currTime + timeToCall); }, timeToCall);
+					id = window.setTimeout(function () { callback(currTime + timeToCall); }, timeToCall);
 
 				lastTime = currTime + timeToCall
 				return id;
 			};
 		}
 		if (!cancelAnimationFrame) {
-			cancelAnimationFrame = function(id) {
+			cancelAnimationFrame = function (id) {
 				clearTimeout(id)
+			}
+		}
+	}());
+
+	//internal task scheduling
+	(function () {
+		var Stack = [],
+			IDs = {},
+			idCounter = 1,
+			implementation,
+			createTask,
+			cancelTask = noop,
+			setImmediate = global.setImmediate || (global.msClearImmediate && global.msSetImmediate) /*IE10*/,
+			clearImmediate = global.clearImmediate || global.msClearImmediate /*IE10*/,
+			MutationObserver = global.MutationObserver || global.WebkitMutationObserver,
+
+			//feature detection
+			hasNextTick = (typeof process === 'object' && Object.prototype.toString.call(process) === '[object process]'),
+			hasPostMessage = (function () {
+				if (!global.postMessage || global.importScripts) return false;
+				//reject Opera 9 and lower
+				if (Object.prototype.toString.call(global.opera) == '[object Opera]' && parseFloat(global.opera.version()) < 10) return false;
+				
+				var isAsync = true,
+					originHandler = global.onmessage;
+
+				global.onmessage = function () { isAsync = false }
+				global.postMessage('', '*')
+				global.onmessage = originHandler
+
+				return isAsync;
+			}()),
+			hasReadyStateChange = !hasPostMessage && document && ('onreadystatechange' in document.createElement('script'));
+
+
+		if (hasNextTick) { //microtask approach.
+			createTask = function (callback) {
+				process.nextTick(callback)
+			}
+		}
+		else if (!!MutationObserver) { //microtask approach.
+			createTask = function (callback) {
+				implementation = new MutationObserver(function (m) {
+					callback()
+				})
+				implementation.target = document.createElement('a')
+				implementation.observe(implementation.target, { attributes: true })
+				implementation.target.setAttribute('rel', 'a')
+			}
+			cancelTask = function () {
+				implementation.disconnect()
+				implementation = implementation.target = undefined
+			}
+		}
+		else if (!!setImmediate) { //native setImmediate implementation
+			createTask = function (callback) {
+				implementation = setImmediate(callback)
+			}
+			cancelTask = function () {
+				clearImmediate(implementation)
+			}
+		}
+		else if (hasPostMessage) { //postMessage approach. Most of browsers.
+			(function () {
+				var message = 'coreasynctask' + Math.round(Math.random() * Math.pow(10, 15)),
+					origin = location.origin || location.host ? (location.protocol + '//' + location.host) : '*',
+					handler,
+					onmessage = function (e) {
+						if (
+							e.source === global
+							&& typeof e.data === 'string'
+							&& e.data == message
+							&& (((e.origin && (location.host ? e.origin : '*')) == origin) || true)
+						) {
+							handler()
+						}
+					};
+
+				createTask = function (callback) {
+					handler = callback
+					global.addEventListener('message', onmessage, false)
+					global.postMessage(message, origin)
+				}
+				cancelTask = function () {
+					handler = undefined
+					global.removeEventListener('message', onmessage)
+				}
+			}())
+		} else if (!!global.MessageChannel) { //MessageChanel approach. Some WebWorkers.
+			createTask = function (callback) {
+				implementation = new global.MessageChannel()
+				implementation.port1.onmessage = function () {
+					callback()
+				}
+				implementation.port2.postMessage({})
+			}
+			cancelTask = function () {
+				implementation.port1.onmessage = null
+				implementation = undefined
+			}
+		} else if (hasReadyStateChange) { //Async event approach. IE 8-
+			createTask = function (callback) {
+				implementation = document.createElement('script')
+				implementation.onreadystatechange = function () {
+					this.onreadystatechange = null
+					this.parentNode.removeChild(this)
+					implementation = undefined
+					callback()
+				}
+				document.head.appendChild(implementation)
+			}
+			cancelTask = function () {
+				implementation.onreadystatechange = null
+				implementation.parentNode.removeChild(implementation)
+				implementation = undefined
+			}
+		} else {// The elder browsers
+			createTask = function (callback) {
+				implementation = setTimeout(callback, 1)
+			}
+			cancelTask = function () {
+				clearTimeout(implementation)
+			}
+		}
+
+		//clean
+		hasNextTick =
+		hasPostMessage =
+		hasReadyStateChange = undefined
+
+		//define
+		setAsyncTask = function (taskFunc) {
+			if (typeof taskFunc !== 'function') return;
+			var id = idCounter++;
+			IDs[id] = taskFunc //save reference to callback
+			//If already has tasks, than just add new one. Execution is already scheduled.
+			if (Stack.length) {
+				Stack.push(taskFunc)
+			}
+			//Else add first task and schedule async execution.
+			else {
+				Stack.push(taskFunc)
+				createTask(function () {
+					var task;
+					while (task = Stack.shift()) {
+						task()
+					}
+				})
+			}
+			return id;
+		}
+
+		clearAsyncTask = function (id) {
+			if (typeof id !== 'number' || !(id in IDs) || !Stack.length) return;
+			var task, i = 0;
+			while (task = Stack[i++]) {
+				if (task === IDs[id]) {
+					Stack.splice(i - 1, 1)
+					delete IDs[id]
+				}
+			}
+			if (!Stack.length) { //cancel async operation if no functions to execute
+				cancelTask()
+			}
+		}
+	}());
+
+	//Extend Error objext
+	(function () {
+		function getLineNumber() {
+			if (this.lineNumber) return this.lineNumber;
+			if (!this.stack) return 0;
+
+			var stack = this.stack,
+				line;
+			//remove first message string in Chrome
+			stack = stack.replace(new RegExp('(\.+): ' + this.message + '\s*'), '')
+			//strip line number
+			line = stack.replace(/(\s+|\))$/i, '').match(/:\d+((?=:\d+)|$)/)
+			line = (line && line.length) ? parseInt(line[0].substr(1), 10) : '*'
+			return line;
+		}
+
+		function getFileName() {
+			if (this.fileName) return this.fileName;
+			if (!this.stack) return '';
+
+			var stack = this.stack,
+				file;
+			//remove first message string in Chrome
+			stack = stack.replace(new RegExp('(\.+): ' + this.message + '\s*'), '')
+			//strip line number
+			file = stack.match(/\(.+?\)/)
+			file = (file && file.length) ? file[0].replace(/^\(|\)$/g, '').replace(/:\d+((?=:\d+)|$)/g, '') : '*'
+			return file;
+		}
+
+		var ErrProt = Error.prototype;
+		
+		if (!(new Error()).line) {
+			if (Object.defineProperties) {
+				Object.defineProperties(ErrProt, {
+					'line': { get: getLineNumber },
+					'file': { get: getFileName }
+				})
+			}
+			else if (ErrProt.__defineGetter__) {
+				ErrProt.__defineGetter__('line', getLineNumber)
+				ErrProt.__defineGetter__('file', getFileName)
+			}
+			else {
+				ErrProt.line = 0
+				ErrProt.file = ''
 			}
 		}
 	}());
@@ -124,7 +343,7 @@ IO:
 		if (typeof param === 'object') {
 			/*array*/
 			if (param.length) {
-				return console.log('[' + param.toString() + ']');
+				return console.log('["' + param.join('", "') + '"]');
 			}
 			/*object*/
 			string += '{\n'
@@ -139,7 +358,7 @@ IO:
 
 	//Collection of all resources objects
 	Resources = {
-		sequence: {js: [], css: [],	media: [], text: [], other: []},
+		sequence: { js: [], css: [], media: [], text: [], other: [] },
 		urls: {},
 		add: function (url, options, executionFunction) {
 			this.urls[url] = {
@@ -176,10 +395,10 @@ IO:
 			//if not ready, mark as executed, to not break sequence
 			isReady = (isReady === undefined) ? true : isReady
 			this.urls[readyUrl].executed = !isReady
-			
+
 
 			//update resources execution. Cascading is preserved for styles.
-			;['js', 'css', 'media', 'text', 'other'].forEach(function(type) {
+			;['js', 'css', 'media', 'text', 'other'].forEach(function (type) {
 				var resource, i = 0;
 				while (resource = Resources.urls[Resources.sequence[type][i++]]) {
 					if (!resource.loaded && !resource.executed)
@@ -191,7 +410,7 @@ IO:
 				}
 			})
 		},
-		notReady: function(readyUrl) {
+		notReady: function (readyUrl) {
 			return this.ready(readyUrl, false)
 		}
 	}
@@ -200,7 +419,7 @@ IO:
 
 
 
-	/* Promise 1.7 */
+								/* Promise 2.1 */
 
 	var Promise = Core.Promise = (function (global) {
 		var Deferred,
@@ -210,11 +429,8 @@ IO:
 			isFunc = function (func) {
 				return (typeof func === 'function')
 			},
-			setImmediate = global.setImmediate || (global.msClearImmediate && global.msSetImmediate) /*IE10*/ || function (callback) {
-				return setTimeout(callback, 1) //emulation
-			},
-			clearImmediate = global.clearImmediate || global.msClearImmediate /*IE10*/ || function (id) {
-				return clearTimeout(id) //emulation
+			isError = function (value) {
+				return (value instanceof Error) || (value && value.name && /Error$/.test(value.name))
 			};
 
 		Deferred = function (canceler) {
@@ -238,11 +454,13 @@ IO:
 			var func = this.isResolved ? handler.done : handler.canceled,
 				defer = this,
 				newResult;
-			
+
 			if (func) {
 				try {
+					//console.warn(defer.result)
 					newResult = func.apply(defer.promise || defer, defer.result); //new or old value
 					if (newResult && typeof newResult.then === "function" && newResult !== (defer.promise || defer)) {
+						//if callback returns Promise, than create chain
 						this.newPromise = newResult //save a link to the new Promise object
 						while (handler = this.Callbacks.shift()) { //migrate handlers to new promise
 							newResult.then(handler.done, handler.canceled, handler.progress)
@@ -251,16 +469,32 @@ IO:
 						newResult.then(defer.updateResult, defer.updateResult, defer.updateResult)
 						return
 					}
-					else
+					else if (isError(newResult)) { //if callback returns error, than change state to rejected
 						defer.updateResult(newResult)
+						if (defer.isResolved) {
+							defer.isResolved = false
+							defer.reject(newResult)
+						}
+					}
+					else {//if callback returns value, than save it as Promise value
+						defer.updateResult(newResult)
+					}
 				}
 				catch (err) {
+					var trowError = !defer.Callbacks.filter(function (handler) {
+						return handler.canceled && handler.canceled !== defer.updateResult
+					}).length;
+
+					defer.updateResult(err)
 					//if exeption is in doneCallback, switch to rejected state from this moment
-					if (!defer.isRejected) {
+					if (defer.isResolved) {
 						defer.isResolved = false
 						defer.reject(err)
 					}
-					throw err
+					//throw error if it was not handled in current event loop
+					if (trowError) {
+						throw err
+					}
 				}
 			} else {
 				//if Deferred rejected and there is no errorback, throw Error
@@ -276,9 +510,11 @@ IO:
 			var handler;
 			this.result = arguments //save value
 			this.isResolved = true
+
 			while (handler = this.Callbacks.shift()) {
 				this.call(handler)
 			}
+			//console.info(this.result)
 			//clear
 			handler = null
 			this.Callbacks = []
@@ -303,7 +539,7 @@ IO:
 			return this
 		}
 
-		Deferred.prototype.progress = function(/*args*/) {
+		Deferred.prototype.progress = function (/*args*/) {
 			if (this.isResolved || this.isRejected) return this;
 			var handler, i = 0, ret;
 			this.result = arguments //save value
@@ -354,21 +590,21 @@ IO:
 		//wait before resolve promise
 		Deferred.prototype.wait = function (ms) {
 			var id,
-				timer = (ms) ? setTimeout : setImmediate;
+				timer = (ms) ? setTimeout : setAsyncTask;
 			id = timer(this.resolve.bind(this), ms)
 			return this.then(
 				function () {//done
-					(ms) ? clearTimeout(id) : clearImmediate(id)
+					ms ? clearTimeout(id) : clearAsyncTask(id)
 				},
 				function () {//canceled
-					(ms) ? clearTimeout(id) : clearImmediate(id)
+					ms ? clearTimeout(id) : clearAsyncTask(id)
 				}
 			)
 		}
 		//wait before reject and cancel promise
 		Deferred.prototype.timeout = function (ms) {
-			var id, defer = this, 
-				timer = (ms) ? setTimeout : setImmediate;
+			var id, defer = this,
+				timer = ms ? setTimeout : setAsyncTask;
 			id = timer(function () {
 				defer.reject(new Error('Timedout'))
 				//and do cancelatin
@@ -376,25 +612,25 @@ IO:
 			}, ms)
 
 			return this.then(
-				function() {//done
-					(ms) ? clearTimeout(id) : clearImmediate(id)
+				function () {//done
+					ms ? clearTimeout(id) : clearAsyncTask(id)
 				},
-				function() {//canceled
-					(ms) ? clearTimeout(id) : clearImmediate(id)
+				function () {//canceled
+					ms ? clearTimeout(id) : clearAsyncTask(id)
 				}
 			)
 		}
 		//call progress with interval before promise is resolved or rejected
 		Deferred.prototype.interval = function (ms) {
 			var id,
-				timer = (ms) ? setTimeout : setImmediate;
+				timer = ms ? setTimeout : setAsyncTask;
 			id = timer(this.progress.bind(this), ms)
 			return this.then(
-				function() {//done
-					(ms) ? clearTimeout(id) : clearImmediate(id)
+				function () {//done
+					ms ? clearTimeout(id) : clearAsyncTask(id)
 				},
-				function() {//canceled
-					(ms) ? clearTimeout(id) : clearImmediate(id)
+				function () {//canceled
+					ms ? clearTimeout(id) : clearAsyncTask(id)
 				}
 			)
 		}
@@ -403,10 +639,10 @@ IO:
 			if (ms) {
 				var delayPromise = new Deferred(), defer = this;
 				this.then(
-					function() {//done
+					function () {//done
 						return delayPromise.wait(ms).then(function () { return defer.result[0] })
 					},
-					function() {//canceled
+					function () {//canceled
 						return delayPromise.timeout(ms).then(null, function () { return defer.result[0] })
 					}
 				)
@@ -426,11 +662,10 @@ IO:
 		// Promise constructor has to be used with `new` operator, 
 		// else returns istant resolved promise object.
 		Promise = function (initFunc, cancelFunc) {
-			var isInstance = (this instanceof Promise),
-				defer;//Deferred, that will serve this Promise
-			
+			var defer;//Deferred, that will serve this Promise
+
 			//if called as a constructor
-			if (isInstance) {
+			if (this instanceof Promise) {
 				defer = new Deferred(cancelFunc)
 				defer.promise = this
 
@@ -443,18 +678,18 @@ IO:
 					defer.then(function () { return initFunc })
 				}
 
-				defer.promise.then = function(d, e, p) {defer.then(d, e, p); return this}
-				defer.promise.cancel = function () {defer.cancel(); return this}
-				defer.promise.wait = function(ms) {defer.wait(ms); return this}
-				defer.promise.timeout = function(ms) {defer.timeout(ms); return this}
-				defer.promise.interval = function(ms) {defer.interval(ms); return this}
-				defer.promise.delay = function(ms) {defer.delay(ms); return this}
-				defer.promise.and = function(p) {defer.and(p); return this}
+				defer.promise.then = function (d, e, p) { defer.then(d, e, p); return this }
+				defer.promise.cancel = function () { defer.cancel(); return this }
+				defer.promise.wait = function (ms) { defer.wait(ms); return this }
+				defer.promise.timeout = function (ms) { defer.timeout(ms); return this }
+				defer.promise.interval = function (ms) { defer.interval(ms); return this }
+				defer.promise.delay = function (ms) { defer.delay(ms); return this }
+				//`.and` is in prototype
 			}
-				//if called to as a function
+				//if called as a function
 			else {
 				defer = new Deferred()
-				defer.promise = new Promise(function(d, e, p) { defer.then(function(r) { d(r) }, function(r) { e(r) }) })
+				defer.promise = new Promise(function (d, e, p) { defer.then(d, e, p) })
 				if (initFunc instanceof Promise) {
 					//return passed promise as it is
 					return initFunc;
@@ -467,7 +702,7 @@ IO:
 					//make promise resolved with function returned value
 					defer.resolve(initFunc())
 				}
-				else if (initFunc instanceof Error || (initFunc && initFunc.toString && /Error:/.test(initFunc.toString()))) {
+				else if (isError(initFunc)) {
 					//make promise rejected with passed error
 					defer.reject(initFunc)
 				}
@@ -475,15 +710,16 @@ IO:
 					//make promise resolved with passed value
 					defer.resolve(initFunc)
 				}
-
-				
 			}
 
 			return defer.promise;
 		}
 
-		PromiseCollection = function(specificFunc) {
-			return function() {
+		//inheritance
+		Promise.prototype.and = Deferred.prototype.and
+
+		PromiseCollection = function (specificFunc) {
+			return function () {
 				var promArr = [],
 					props = {
 						length: 0,
@@ -493,7 +729,7 @@ IO:
 						ErrorResults: []
 					};
 
-				Array.prototype.forEach.call(arguments, function(itm) {
+				Array.prototype.forEach.call(arguments, function (itm) {
 					if (itm instanceof Array || (typeof itm === 'object' && 0 in itm)) //like Array
 						promArr = promArr.concat(Array.prototype.slice.call(itm))
 					else
@@ -501,14 +737,14 @@ IO:
 				})
 				props.length = promArr.length
 
-				return new Promise(function(resolve, reject, progress) {
+				return new Promise(function (resolve, reject, progress) {
 					//create closure of current state for callbacks
 					var itemCallbacks = specificFunc(props, resolve, reject, progress)
 
-					promArr.forEach(function(p, i) {
+					promArr.forEach(function (p, i) {
 						//ensure that item is Promise
 						p = Promise(p)
-						setImmediate(function() {
+						setAsyncTask(function () {
 							p.then(
 								itemCallbacks.itemResolved.bind(p, i),
 								itemCallbacks.itemRejected.bind(p, i),
@@ -518,8 +754,8 @@ IO:
 					})
 				}, function () {
 					//cancel all Promises in array
-					promArr && setImmediate(function() {
-						promArr.forEach(function(p) {
+					promArr && setAsyncTask(function () {
+						promArr.forEach(function (p) {
 							p.cancel()
 						})
 					})
@@ -528,14 +764,14 @@ IO:
 		}
 
 		//`every` method, gathers many promises and becomes resolved, when they all resolved
-		Promise.every = PromiseCollection(function(props, resolveCollection, rejectCollection, progressCollection) {
+		Promise.every = PromiseCollection(function (props, resolveCollection, rejectCollection, progressCollection) {
 			//if no arguments, resolve collection
 			if (!props.length) {
 				resolveCollection([])
 			}
 
 			return {
-				itemResolved: function(i, result) {
+				itemResolved: function (i, result) {
 					progressCollection(result)
 					props.done += 1;
 					props.Results[i] = result
@@ -543,7 +779,7 @@ IO:
 						resolveCollection(props.Results)
 					}
 				},
-				itemRejected: function(i, err) {
+				itemRejected: function (i, err) {
 					rejectCollection(err)
 				},
 				itemProgress: noop
@@ -551,14 +787,14 @@ IO:
 		})
 
 		//`any` method, gathers many promises and becomes resolved, when they all fullfilled with any results.
-		Promise.any = PromiseCollection(function(props, resolveCollection, rejectCollection, progressCollection) {
+		Promise.any = PromiseCollection(function (props, resolveCollection, rejectCollection, progressCollection) {
 			//if no arguments, resolve collection
 			if (!props.length) {
 				resolveCollection([])
 			}
 
 			return {
-				itemResolved: function(i, result) {
+				itemResolved: function (i, result) {
 					progressCollection(result)
 					props.done += 1;
 					props.Results[i] = result
@@ -566,7 +802,7 @@ IO:
 						resolveCollection(props.Results)
 					}
 				},
-				itemRejected: function(i, err) {
+				itemRejected: function (i, err) {
 					progressCollection(err)
 					props.done += 1
 					props.Results[i] = err
@@ -578,18 +814,18 @@ IO:
 			}
 		})
 		//`some` method, gathers many promises and becomes resolved, when they all fullfilled with any results. But if all promises are rejected `some` also becomes rejected.
-		Promise.some = PromiseCollection(function(props, resolveCollection, rejectCollection, progressCollection) {
+		Promise.some = PromiseCollection(function (props, resolveCollection, rejectCollection, progressCollection) {
 			return {
-				itemResolved: function(i, result) {
+				itemResolved: function (i, result) {
 					progressCollection(result)
 					props.done += 1;
 					props.Results[i] = result
 					if (props.done == props.length) {
 						//return only successful results
-						resolveCollection(props.Results.filter(function() {return true}))
+						resolveCollection(props.Results.filter(function () { return true }))
 					}
 				},
-				itemRejected: function(i, err) {
+				itemRejected: function (i, err) {
 					progressCollection(err)
 					props.done += 1
 					props.error += 1
@@ -604,18 +840,18 @@ IO:
 				itemProgress: noop
 			}
 		})
-		
+
 		//Determines if `value` is a Promise-like object
-		Promise.isPromise = function(value) {
+		Promise.isPromise = function (value) {
 			return value && typeof value === 'object' && typeof value.then === 'function';
 		}
-		
+
 		//expose `Promise` constructor and helpers
 		return Promise;
 	}(global));//`global` is an environment global variable
 
 
-	
+
 
 	// Promise of document 'DOMContentLoaded'
 	Core.DOMReady = new Promise(function (onready, onabort) {
@@ -714,12 +950,12 @@ IO:
 			else if (!!document.execCommand) document.execCommand('Stop')
 		}
 	)
-	
+
 	// document.readyState polyfill
 	if (document && !document.readyState) {
 		document.readyState = 'loading'
-		Core.DOMReady.then(function() { document.readyState = 'interactive' })
-		Core.DOMLoaded.then(function() { document.readyState = 'complete' })
+		Core.DOMReady.then(function () { document.readyState = 'interactive' })
+		Core.DOMLoaded.then(function () { document.readyState = 'complete' })
 	}
 
 	//Promise of included UI modules
@@ -731,15 +967,15 @@ IO:
 		)
 	})
 
-	
+
 	//Because of dinamic loader DOMReady and DOMLoaded need to be deferred while necessary resources will be ready
 	//Advanced DOMLoaded, that fulfills only when all (inclusive async) resources loaded
-	Core.DOMLoaded = (function() {
+	Core.DOMLoaded = (function () {
 		var loadedPromise = Core.DOMLoaded,
 			resourcesPromise,
 			Proms = [], i;
 
-		return new Promise(function(loaded, aborted, progressed) {
+		return new Promise(function (loaded, aborted, progressed) {
 			Core.DOMReady.then(function () {
 				for (i in Resources.urls) {
 					Proms.push(Resources.urls[i].promise)
@@ -782,11 +1018,27 @@ IO:
 	)
 
 
+	//Modified Promise constructor for Loader
+	var LoadPromise = (function () {
+		function LoadPromise(initFunc, cancelFunc) {
+			var promise = (this instanceof LoadPromise) ? new Promise(initFunc, cancelFunc) : Promise(initFunc, cancelFunc);
+			promise.load = LoadPromise.prototype.load
+			return promise;
+		}
+		LoadPromise.prototype.load = function (src, options) {
+			return this.then(function () {
+				return Core.load(src, options)
+			})
+		}
+		return LoadPromise;
+	}())
 
 
-	/* Loader 1.81 */
+
+								/* Loader 2.3 */
+
 	//help for dev http://pieisgood.org/test/script-link-events/ 
-	Core.load = function(src, options) {
+	Core.load = function (src, options) {
 		options || (options = {})
 
 		//`options` may also be String of attributes/parameters, separated by space or comma: 'defer reload' or 'async, reload'
@@ -794,10 +1046,11 @@ IO:
 			options = {
 				defer: /(^|\s*,\s*|\s+)defer($|\s*,\s*|\s+)/.test(options),
 				async: /(^|\s*,\s*|\s+)async($|\s*,\s*|\s+)/.test(options),
-				reload: /(^|\s*,\s*|\s+)reload($|\s*,\s*|\s+)/.test(options)
+				reload: /(^|\s*,\s*|\s+)reload($|\s*,\s*|\s+)/.test(options),
+				cache: /(^|\s*,\s*|\s+)cache($|\s*,\s*|\s+)/.test(options) || undefined
 			}
 		}
-		
+
 		var n,
 			elem,
 			loadPromise,
@@ -826,13 +1079,13 @@ IO:
 			options.async = !!elem.async
 			options.defer = !!elem.defer
 		}
-		
-		if (!src) return Promise(elem);
+
+		if (!src) return LoadPromise(elem);
 
 		if (src instanceof Array) {
-			return Promise.every(src.map(function(url) {
+			return LoadPromise(Promise.every(src.map(function (url) {
 				return Core.load(url, options)
-			}));
+			})));
 		}
 
 		//if have to reload resource one more time
@@ -847,10 +1100,10 @@ IO:
 		if (!options.reload && (src in Resources.urls)) {
 			return Resources.urls[src].promise;
 		}
-		
+
 		n = src.split('?')[0].lastIndexOf('.')
 		if (n == -1 && !options.type) {
-			return Promise();
+			return LoadPromise();
 		}
 
 		//define format of resource
@@ -863,14 +1116,16 @@ IO:
 				case 'js': options.type = 'script'; break
 					//CSS files
 				case 'css': options.type = 'style'; break
-					//Image files
+					//images
 				case 'jpg': case 'jpeg':
 				case 'gif': case 'png':
 				case 'svg': case 'webp':
 				case 'bmp': options.type = 'image'; break
 					//fonts
-				case 'woff': case 'eot':
-				case 'ttf': case 'otf': options.type = 'font'; break
+				case 'eot': case 'woff':
+				case 'ttf':	case 'otf':
+				case 'truetype': case 'opentype':
+				case 'embedded-opentype': options.type = 'font'; break
 					//audio
 				case 'mp3': case 'ogg':
 				case 'wav': case 'aac':
@@ -890,9 +1145,25 @@ IO:
 			}
 		}
 
+		//use default cache value if not defined
+		if (options.cache === undefined) {
+			switch (options.type) {
+				case 'image':
+					options.cache = Core.config.cache && Core.config.cacheImages
+					break;
+				case 'audio':
+				case 'video':
+				case 'media':
+					options.cache = Core.config.cache && Core.config.cacheMedia
+					break;
+				default:
+					options.cache = Core.config.cache
+			}
+		}
+
 		switch (options.type) {
 			case 'script':
-				loadPromise = new Promise(function(loaded, failed, progress) {
+				loadPromise = new LoadPromise(function (loaded, failed, progress) {
 					//Reference:
 					//	https://spreadsheets.google.com/lv?key=tDdcrv9wNQRCNCRCflWxhYQ
 					//	http://www.phpied.com/preload-cssjavascript-without-execution/
@@ -940,7 +1211,7 @@ IO:
 						//Add to resource collection
 						Resources.add(src, options, noop) //empty function need to be here
 						//setup SRC, considering cache
-						elem.src || (elem.src = Core.config.cache ? src : Core.URL.randomize(src))
+						elem.src || (elem.src = options.cache ? src : Core.URL.randomize(src))
 
 						//start prefetch in parallel way
 						script = document.createElement('script')
@@ -977,7 +1248,7 @@ IO:
 							}
 							else {
 								//Add to resource collection and attach handler to be executed in correct order
-								Resources.add(src, options, function() {
+								Resources.add(src, options, function () {
 									//insert to DOM
 									//document.body ? document.body.appendChild(elem) : document.head.appendChild(elem)
 									document.head.appendChild(elem)
@@ -991,8 +1262,8 @@ IO:
 									}
 								})
 							}
-							
-							elem.onreadystatechange = function() {
+
+							elem.onreadystatechange = function () {
 								if (isLoaded) return;
 								if (this.readyState && !/complete|loaded/.test(this.readyState)) {
 									progress(this.readyState) //progressback
@@ -1012,14 +1283,14 @@ IO:
 								} else {
 									Resources.ready(src)
 								}
-								
+
 							}
 						}
 							//for sane browsers
 						else {
 							//Add to resource collection
 							Resources.add(src, options)
-							elem.onload = function() {
+							elem.onload = function () {
 								isLoaded = true
 								this.onload = this.onerror = null
 								loaded(elem) //callback
@@ -1040,7 +1311,7 @@ IO:
 						}
 
 						//for Opera, imitate asynchronous execution, to preserve UI rendering blocking
-						timerId = Util.asyncCall(isOldOpera, function() {
+						timerId = Util.asyncCall(isOldOpera, function () {
 							if (options.async) {
 								elem.defer = true //for fallback
 								elem.async = true
@@ -1050,8 +1321,8 @@ IO:
 								elem.async = false
 							}
 							//setup SRC, considering cache
-							elem.src || (elem.src = Core.config.cache ? src : Core.URL.randomize(src))
-							
+							elem.src || (elem.src = options.cache ? src : Core.URL.randomize(src))
+
 						})
 					}
 
@@ -1061,26 +1332,19 @@ IO:
 
 						//Add to resource collection
 						Resources.add(src, options)
-						Util.requestSync(src).then(
-							function(textContent) {
+						Util.requestSync(options.cache ? src : Core.URL.randomize(src)).then(
+							function (textContent) {
 								isLoaded = true
-								elem.setAttribute('data-src', src)
-								//catch error in IE
-								try {
-									elem.innerHTML = textContent// + '\n//@ sourceURL="'+src+'"'
-								} catch (err) {
-									elem.text = textContent// + '\n//@ sourceURL="' + src + '"'
-								}
 								//insert to DOM
-								document.head.appendChild(elem)
+								Util.injectJS(textContent, { 'data-src': src }, elem)
 								loaded(elem) //callback
 							},
-							function() {
+							function () {
 								isCanceled = true
 								failed() //errorback
 							}
 						)
-						
+
 					}
 
 				},
@@ -1103,7 +1367,7 @@ IO:
 				break;
 
 			case 'style':
-				loadPromise = new Promise(function (loaded, failed, progress) {
+				loadPromise = new LoadPromise(function (loaded, failed, progress) {
 					//Reference:
 					//	http://www.backalleycoder.com/2011/03/20/link-tag-css-stylesheet-load-event/
 					//	http://www.phpied.com/when-is-a-stylesheet-really-loaded/
@@ -1204,7 +1468,7 @@ IO:
 						}
 
 						//setup SRC, considering cache
-						elem.href = Core.config.cache ? src : Core.URL.randomize(src)
+						elem.href = options.cache ? src : Core.URL.randomize(src)
 						//execution depends on async or not async
 						Util.asyncCall(options.async, function () {
 							//insert to DOM
@@ -1246,7 +1510,7 @@ IO:
 							}
 								//fix absent 'onload' and 'onerror'
 							else if (isBrokenBrowser) {
-								pollingId = setInterval_15(function() {
+								pollingId = setInterval_15(function () {
 									try {
 										//elem.sheet.cssRules; // accessable when loaded
 										if (/*elem.sheet.cssRules &&*/ elem.sheet.cssRules.length) {
@@ -1278,14 +1542,14 @@ IO:
 					else {
 						//Add to resource collection
 						Resources.add(src, options)
-						Util.requestSync(src).then(
-							function(textContent) {
+						Util.requestSync(options.cache ? src : Core.URL.randomize(src)).then(
+							function (textContent) {
 								textContent = Util.relocateCSS(textContent, src, location.href)//fix all URLs
 								elem = Util.injectCSS(textContent, { 'data-src': src, 'media': options.media })
 								isLoaded = true
 								loaded(elem) //callback
 							},
-							function(err) {
+							function (err) {
 								isCanceled = true
 								failed() //errorback
 							}
@@ -1311,7 +1575,7 @@ IO:
 				break;
 
 			case 'image':
-				loadPromise = new Promise(function (loaded, failed, progress) {
+				loadPromise = new LoadPromise(function (loaded, failed, progress) {
 					//BUGS: 
 					//	- if cache is anabled, in FF image is loaded successfully even if loading was canceled, because it was already in cache
 					//	- onabort works only in IE and only if image is inserted in DOM. If image is not in DOM in IE, it can't be aborted.
@@ -1334,7 +1598,7 @@ IO:
 					}
 
 					elem = elem || new Image()
-					elem.onload = elem.onreadystatechange = function() {
+					elem.onload = elem.onreadystatechange = function () {
 						clearInterval(timerId)
 						if (this.readyState && !/complete|loaded/.test(this.readyState)) {
 							progress(elem, this.readyState) //progressback
@@ -1350,23 +1614,23 @@ IO:
 							loaded(elem) //callback
 						}
 					}
-					elem.onerror = function(e) {
+					elem.onerror = function (e) {
 						clearInterval(timerId)
 						this.onload = this.onreadystatechange = this.onerror = this.onabort = null
 						isCanceled = true
 						failed(new Error('Error 404: Image \'' + src + '\' not found')) //errorback
 					}
 					//window.onabort
-					elem.onabort = function() {
+					elem.onabort = function () {
 						clearInterval(timerId)
 						this.onload = this.onreadystatechange = this.onerror = this.onabort = null
 						isCanceled = true
 						failed(new Error('Aborted')) //errorback
 					}
 					//setup SRC, considering cache
-					elem.src || (elem.src = (Core.config.cache && Core.config.cacheImages) ? src : Core.URL.randomize(src))
+					elem.src || (elem.src = options.cache ? src : Core.URL.randomize(src))
 
-					timerId = setInterval_15(function() {
+					timerId = setInterval_15(function () {
 						//check image sizes
 						if (elem.width) {
 							clearInterval(timerId)
@@ -1391,11 +1655,273 @@ IO:
 					}
 				})
 				break;
-			
+
+			case 'font':
+				loadPromise = new Promise(function (loaded, rejected, progress) {
+					var font = {
+							family: options.family,
+							weight: options.weight,
+							style: options.style,
+							stretch: options.stretch,
+							unicodeRange: options.unicodeRange,
+							variant: options.variant,
+							featureSettings: options.featureSettings,
+							format: options.format,
+							local: options.local
+						},
+						done = function () {
+							isLoaded = true
+							loaded.call(undefined, font)
+						},
+						failed = function () {
+							isCanceled = true
+							rejected.call(undefined, new Error('Unable to load ' + src))
+						},
+						declaretion = '';
+
+					//correct format
+					switch (font.format) {
+						case 'eot': font.format = 'embedded-opentype'; break
+						case 'ttf': font.format = 'truetype'; break
+						case 'otf': font.format = 'opentype'
+					}
+
+					//Defer
+					if (options.defer && !options.async) {
+						// Add to resource collection and attach handler to be executed in correct order.
+						// Fonts has their own sequence, that is not relative to 'js' or 'css' etc.
+						Resources.add(src, options, function () {
+							//change place in DOM, to change cascading rules
+							document.head.appendChild(elem)
+							done() //callback
+						})
+					}
+					//Async or sync
+					else {
+						// Add to resource collection
+						Resources.add(src, options)
+					}
+
+					//create hidden element to check font changes
+					var shadowElem = document.createElement('span'),
+						fileName = src.split(/\.[\w*]+$/)[0];
+						
+					shadowElem.innerHTML = 'qwertyuiopasdfghjklzxcvbnm1234567890 \uf087'
+					
+					//append test element to DOM
+					document.body.insertBefore(shadowElem, document.body.firstChild)
+					
+					//defaults
+					font.family = font.family || fileName.split('/').pop().split(/[\?#]/)[0]
+					font.local = font.local || [font.family]
+
+
+					declaretion =
+						'@font-face{\n' +
+							(font.weight ? '\tfont-weight: ' + font.weight + ';\n' : '') +
+							(font.style ? '\tfont-style: ' + font.style + ';\n' : '') +
+							(font.stretch ? '\tfont-stretch: ' + font.stretch + ';\n' : '') +
+							(font.unicodeRange ? '\tunicode-range: ' + font.unicodeRange + ';\n' : '') +
+							(font.variant ? '\tfont-variant: ' + font.variant + ';\n' : '') +
+							(font.featureSettings ? '\tfont-feature-settings: ' + font.featureSettings + ';\n' : '') +
+							'\tfont-family: "' + font.family + '";\n' +
+
+							((font.format == 'embedded-opentype' || font.format == '*') ?
+								'\tsrc: url("' + (options.cache ? fileName + '.eot' : Core.URL.randomize(fileName + '.eot')) + '");\n' : '') +
+
+							'\tsrc: ' + font.local.map(function (family) { return 'local("' + family + '")' }).join(', ') +
+
+							((font.format == '*') ?
+								(
+									',\n\turl("' + (options.cache ? fileName + '.woff' : Core.URL.randomize(fileName + '.woff')) + '") format("woff")' +
+									',\n\turl("' + (options.cache ? fileName + '.ttf' : Core.URL.randomize(fileName + '.ttf')) + '") format("truetype")' +
+									',\n\turl("' + (options.cache ? fileName + '.otf' : Core.URL.randomize(fileName + '.otf')) + '") format("opentype")'
+								)
+								: (
+									',\n\turl("' + (options.cache ? src : Core.URL.randomize(src)) + '") format("' + font.format + '")'
+								)) +
+						';\n}';
+
+					//defaults
+					font.weight = font.weight || 'normal'
+					font.style = font.style || 'normal'
+					font.stretch = font.stretch || 'normal'
+					font.unicodeRange = font.unicodeRange || 'U+0-10FFFF'
+					font.variant = font.variant || 'normal'
+					font.featureSettings = font.featureSettings || 'normal'
+
+					
+					//Promise of `shadowElem` resize
+					var whenShadowElemResized = new Promise(function (resized, error) {
+						var callback,
+							initialWidth,
+							initialHeight,
+							styleText = '\
+								font-family: serif;\
+								font-size: 16px;\
+								line-height: normal;\
+								width: auto;\
+								height: auto;\
+								white-space: nowrap;\
+								font-weight:' + font.weight + ';\
+								font-style:' + font.style + ';\
+								font-stretch:' + font.stretch + ';\
+								font-variant:' + font.variant + ';\
+								font-feature-settings:' + font.featureSettings + ';\
+								display: inline-block;\
+								position: absolute;\
+								overflow: hidden;\
+								top: -1000px;\
+								' + ('ltr' ? 'left' : 'right') + ': -10000em\
+							';
+						
+						shadowElem.style.cssText = styleText
+						shadowElem.setAttribute('style', styleText)
+
+						//console.log("original content size: " + shadowElem.offsetWidth + "x" + shadowElem.offsetHeight)
+						if (shadowElem.attachEvent && !window.opera) {
+							callback = function () {
+								shadowElem.detachEvent('onresize', callback)
+								resized() //succeess
+							};
+
+							//add listener
+							shadowElem.attachEvent('onresize', callback)
+						}
+						else if (!window.opera) {
+							var tempHtml = shadowElem.innerHTML;
+
+							shadowElem.innerHTML =
+								'<div class="shadowElemContent" style="position:relative; display:inline-block">\
+								<div class="shadowElemInnerWrapper" style="position:absolute; width:100%; height:100%; overflow:hidden;">\
+									<div class="shadowElemInnerContent"></div>\
+								</div>\
+								' + tempHtml + ' \
+							</div>'
+
+							var content = shadowElem.querySelector('.shadowElemContent'),
+								innerWrapper = shadowElem.querySelector('.shadowElemInnerWrapper'),
+								innerContent = shadowElem.querySelector('.shadowElemInnerContent');
+
+							initialWidth = content.offsetWidth
+							initialHeight = content.offsetHeight
+							callback = function () {
+								if (initialWidth != content.offsetWidth || initialHeight != content.offsetHeight) {
+									shadowElem.removeEventListener('scroll', resized)
+									resized() //succeess
+								}
+								else {
+									progress('loading') //progress
+								}
+							};
+
+							// Resize shadowElem and scroll its content to the bottom right corner
+							shadowElem.style.width = (initialWidth - 1) + 'px';
+							shadowElem.style.height = (initialHeight - 1) + 'px';
+							// Resize inner content and scroll inner wrapper to the bottom right corner
+							innerContent.style.width = (initialWidth + 1) + 'px';
+							innerContent.style.height = (initialHeight + 1) + 'px';
+							// scroll
+							shadowElem.scrollLeft = shadowElem.scrollWidth - shadowElem.clientWidth;
+							shadowElem.scrollTop = shadowElem.scrollHeight - shadowElem.clientHeight;
+							innerWrapper.scrollLeft = innerWrapper.scrollWidth - innerWrapper.clientWidth;
+							innerWrapper.scrollTop = innerWrapper.scrollHeight - innerWrapper.clientHeight;
+
+							//add listeners
+							shadowElem.addEventListener('scroll', callback)
+							innerWrapper.addEventListener('scroll', callback)
+						}
+						else {
+							initialWidth = shadowElem.offsetWidth
+							initialHeight = shadowElem.offsetHeight
+							timerId = setInterval_15(function () {
+								if (initialWidth != shadowElem.offsetWidth || initialHeight != shadowElem.offsetHeight) {
+									clearInterval(timerId)
+									resized() //succeess
+								}
+								else {
+									progress('loading') //progress
+								}
+							})
+						}
+
+					})
+					
+					//detect 404 error
+					var whenFontsAvailable = (options.defer || options.async) ?
+						//async Promise
+						Promise.some(
+							font.format == '*' ? [
+								Core.URL.isAvailableAsync(fileName + '.woff'),
+								Core.URL.isAvailableAsync(fileName + '.ttf'),
+								Core.URL.isAvailableAsync(fileName + '.otf'),
+								Core.URL.isAvailableAsync(fileName + '.eot')
+							] : [
+								Core.URL.isAvailableAsync(src)
+							]
+						).then(function (Results) {
+							return Results.some(function (isAvailable) { return isAvailable }) || new Error()
+						})
+						//sync Promise
+						: Promise(
+							font.format == '*' ? (
+								Core.URL.isAvailable(fileName + '.woff')
+								|| Core.URL.isAvailable(fileName + '.ttf')
+								|| Core.URL.isAvailable(fileName + '.otf')
+								|| Core.URL.isAvailable(fileName + '.eot')
+								|| new Error()
+							) : (
+								Core.URL.isAvailable(src)
+								|| new Error()
+							)
+						)
+
+					//apply new font. IE < 9 can't detect resize on the same event loop.
+					Util.asyncCall(isOldIE, function () { shadowElem.style.fontFamily = '"' + font.family + '", serif' })
+
+					whenShadowElemResized.then(function () {
+						//console.info(shadowElem.offsetWidth + 'x' + shadowElem.offsetHeight + ' - ' + font.family + ' ' + font.style)
+						//shadowElem.parentNode.removeChild(shadowElem)//remove test element from DOM
+						elem && (elem.shadowElem = undefined)
+						if (options.defer && !options.async) {
+							Resources.ready(src)
+						} else {
+							done() //callback
+						}
+					})
+
+					whenFontsAvailable.then(function () {
+						if (isCanceled || isLoaded) return;
+						elem = Util.injectCSS(declaretion, { 'data-font': font.family })
+						elem.shadowElem = shadowElem //save reference to elem to be possible to remove it during canceletion
+					}, function () {
+						failed() //errorback
+						if (options.defer && !options.async) {
+							Resources.notReady(src) //404
+						}
+					})
+				},
+				//on cancel loading
+				function canceler() {
+					if (isCanceled || isLoaded) return;
+					isCanceled = true
+					//stop any delayed execution
+					clearInterval(timerId)
+					//remove elements from DOM
+					elem.shadowElem && elem.shadowElem.parentNode.removeChild(shadowElem)
+					elem && elem.parentNode && elem.parentNode.removeChild(elem)
+					elem.shadowElem = undefined
+					//to not break sequence
+					if (options.defer && !options.async) {
+						Resources.notReady(src) //404
+					}
+				})
+				break;
+
 			case 'audio':
 			case 'video':
 			case 'media':
-				loadPromise = new Promise(function(loaded, failed, progress) {
+				loadPromise = new LoadPromise(function (loaded, failed, progress) {
 					//Reference:
 					// http://remysharp.com/2010/12/23/audio-sprites/
 					// http://www.whatwg.org/specs/web-apps/current-work/multipage/the-video-element.html#attr-media-crossorigin
@@ -1442,7 +1968,7 @@ IO:
 						failed(new Error('MEDIA_ERR_SRC_NOT_SUPPORTED'))
 						return;
 					}
-					
+
 					var isProblemWebkit = !!window.webkitURL,//try to detect Blink browsers
 						onProgress = function (e) {
 							//console.log(this.buffered.length && (this.duration - this.buffered.end(0)))
@@ -1456,11 +1982,11 @@ IO:
 									elem.currentTime = parseInt(elem.buffered.end(0) + elem.buffered.end(0) * 0.1)
 								}, 50)
 							}
-							
+
 							//if buffer is not full, than it is not loaded
 							if (e.type != 'load') {
 								//current browsers
-								if (this.buffered && !(this.buffered.length && ((this.buffered.end(0) - this.duration).toFixed(3) >= 0))){
+								if (this.buffered && !(this.buffered.length && ((this.buffered.end(0) - this.duration).toFixed(3) >= 0))) {
 									progress(
 										e.type,
 										this.buffered.length && (this.buffered.end(0) / this.duration).toFixed(5) || 0,
@@ -1493,11 +2019,11 @@ IO:
 								loaded(elem) //callback
 							}
 						},
-						onError = function(e) {
+						onError = function (e) {
 							var i, err,
 								code = e.target.error.code,
 								MediaError = e.target.error.constructor;
-							
+
 							for (i in MediaError) {
 								if (MediaError[i] == code) {
 									err = i
@@ -1508,13 +2034,13 @@ IO:
 							isCanceled = true
 							failed(new Error(err)) //errorback
 						},
-						onAbort = function() {
+						onAbort = function () {
 							elem.cleanHandlers()
 							isCanceled = true
 							failed(new Error('Aborted')) //errorback
 						};
 
-					elem.cleanHandlers = function() {
+					elem.cleanHandlers = function () {
 						//crazyness for IE10- and Blink 30-
 						if ('oncanplay' in elem) {
 							elem.onloadstart = elem.ondurationchange = elem.onloadedmetadata =
@@ -1542,12 +2068,12 @@ IO:
 					//crazyness for IE10- and Blink 30-
 					if ('oncanplay' in elem) {
 						elem.onloadstart = elem.ondurationchange = elem.onloadedmetadata =
-						elem.onloadeddata =	elem.onprogress = elem.oncanplay = elem.oncanplaythrough =
+						elem.onloadeddata = elem.onprogress = elem.oncanplay = elem.oncanplaythrough =
 						elem.onload = onProgress
 
 						elem.onerror = onError
 
-						elem.oncancel =	elem.onabort = onAbort
+						elem.oncancel = elem.onabort = onAbort
 					} else {
 						Util.addDOMEvent(elem, 'loadstart', onProgress)
 						Util.addDOMEvent(elem, 'durationchange', onProgress)
@@ -1563,14 +2089,14 @@ IO:
 						Util.addDOMEvent(elem, 'cancel', onAbort)
 						Util.addDOMEvent(elem, 'abort', onAbort)
 					}
-					
+
 					//setup SRC, considering cache
-					elem.src || (elem.src = (Core.config.cache && Core.config.cacheMedia) ? src : Core.URL.randomize(src))
-						
+					elem.src || (elem.src = options.cache ? src : Core.URL.randomize(src))
+
 					//if media is already loaded(complete)
 					if (this.buffered && this.buffered.length && ((this.buffered.end(0) - this.duration).toFixed(3) >= 0)) {
 						elem.complete = true
-						onProgress({type: 'load'})
+						onProgress({ type: 'load' })
 					}
 						//else start preload
 					else if (!elem.duration) {
@@ -1594,7 +2120,7 @@ IO:
 				break;
 
 			case 'json':
-				loadPromise = new Promise(function (loaded, failed, progress) {
+				loadPromise = new LoadPromise(function (loaded, failed, progress) {
 					//Defer
 					if (options.defer && !options.async) {
 						// Add to resource collection and attach handler to be executed in correct order.
@@ -1611,8 +2137,8 @@ IO:
 					}
 
 					//Async or defer or sync
-					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
-						function(result) {
+					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](options.cache ? src : Core.URL.randomize(src)).then(
+						function (result) {
 							try {
 								textContent = Core.JSON.parse(result)
 								if (options.defer && !options.async) {
@@ -1647,7 +2173,7 @@ IO:
 				break;
 
 			case 'jsonp':
-				loadPromise = new Promise(function(loaded, failed, progress) {
+				loadPromise = new LoadPromise(function (loaded, failed, progress) {
 					var callbackName = 'coreJsonCallback_' + Math.round(Math.random() * Math.pow(10, 15)),
 						match;
 
@@ -1659,13 +2185,13 @@ IO:
 					}
 					//save `callbacName` in outer scope
 					textContent = callbackName
-					window[callbackName] = function(/*data*/) {
+					window[callbackName] = function (/*data*/) {
 						window[callbackName] = undefined
 						isLoaded = true
 						loaded.apply(null, arguments)//callback
 					}
 					options.type = 'script'
-					elem = Core.load(src, options).then(null, function(err) {
+					elem = Core.load(src, options).then(null, function (err) {
 						window[callbackName] = undefined
 						isCanceled = true
 						failed(err) //errback
@@ -1684,7 +2210,7 @@ IO:
 
 			case 'text':
 			default:
-				loadPromise = new Promise(function(loaded, failed, progress) {
+				loadPromise = new LoadPromise(function (loaded, failed, progress) {
 					//async, defer - Nothing will be inserted into document. Returned value is a String.
 					//sync - Requested text emediatly will be inserted to document. Returned value is a String.
 
@@ -1692,7 +2218,7 @@ IO:
 					if (options.defer && !options.async) {
 						// Add to resource collection and attach handler to be executed in correct order.
 						// Documents has theire own sequence, that not relative to 'js' or 'css' etc.
-						Resources.add(src, options, function() {
+						Resources.add(src, options, function () {
 							isLoaded = true
 							loaded(textContent) //callback
 						})
@@ -1704,18 +2230,14 @@ IO:
 					}
 
 					//Async or defer or sync
-					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](src).then(
-						function(result) {
+					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](options.cache ? src : Core.URL.randomize(src)).then(
+						function (result) {
 							try {
 								//process variables in text if resorce defined as a text file
 								textContent = (options.type == 'text') ? Core.template(result) : result
 								if (options.defer && !options.async) {
 									Resources.ready(src)
 								} else {
-									if (!options.async && options.type == 'text') {
-										//insert to DOM if resorce defined as a text file, otherwise just return the text content
-										document.writeln(textContent)
-									}
 									isLoaded = true
 									loaded(textContent) //callback
 								}
@@ -1723,13 +2245,13 @@ IO:
 								isCanceled = true
 								failed(err) //errback
 							}
-							
+
 						},
-						function(err) {
+						function (err) {
 							isCanceled = true
 							failed(err) //errback
 						},
-						function(val) { progress(val) }
+						function (val) { progress(val) }
 					)
 				},
 				//on cancel loading
@@ -1755,12 +2277,12 @@ IO:
 	}
 
 
-	
+
 
 
 	/* Module constructor */
 
-	Module = function(moduleName, moduleBody) {
+	Module = function (moduleName, moduleBody) {
 		this.body = moduleBody
 		this.style = null //switchable styles - style/link object
 		this.name = moduleName
@@ -1770,14 +2292,14 @@ IO:
 		this.sandbox = undefined //will be changed in future
 	}
 
-	Module.prototype.start = function() {
+	Module.prototype.start = function () {
 		var module = this;
 		if (!module.initiated) {
 			//if module has switchable styles
 			if (module.body.css) {
 				module.style = Util.injectCSS(module.body.css, { 'data-module': module.name })
 			}
-			
+
 			//if has initialization function
 			if (typeof module.body.init === 'function') {
 				try {
@@ -1787,8 +2309,7 @@ IO:
 					//remove styles back 
 					module.style && document.head.removeChild(module.style)
 					module.style = null
-					Util.fixError(err) //implement err.line
-					module.promise = new Promise().cancel().then(null, function() { return err }) //return rejected promise
+					module.promise = new Promise().cancel().then(null, function () { return err }) //return rejected promise
 				}
 			}
 			else {
@@ -1799,7 +2320,7 @@ IO:
 		return module.promise;
 	}
 
-	Module.prototype.stop = function() {
+	Module.prototype.stop = function () {
 		var module = this;
 
 		if (module.initiated) {
@@ -1810,8 +2331,7 @@ IO:
 					module.initiated = false //switch initiated status
 					module.body.runtime_listen && (module.body.runtime_listen = undefined) //remove runtime listeners
 				} catch (err) {
-					Util.fixError(err) //implement err.line
-					module.promise = new Promise().cancel().then(null, function() { return err }) //return rejected promise
+					module.promise = new Promise().cancel().then(null, function () { return err }) //return rejected promise
 				}
 			}
 			else {
@@ -1835,13 +2355,13 @@ IO:
 
 	/* Sandbox constructor */
 	//Creates new sandbox instance
-	Sandbox = function(moduleName) {
+	Sandbox = function (moduleName) {
 		this.template = Templater(this)//pass new sandbox as a context
 		this.moduleName = moduleName || ''
 		this.moduleUrl = '.'
 	}
 
-	Sandbox.prototype.hasFeature = function(featureName) {
+	Sandbox.prototype.hasFeature = function (featureName) {
 		var feature;
 		if (typeof featureName !== 'string') return;
 		if (featureName in Core.Features) {
@@ -1852,7 +2372,7 @@ IO:
 	}
 
 	//Alias for `Core.load(url, options)`, but with additional context templating rules for URLs
-	Sandbox.prototype.load = function(url) {
+	Sandbox.prototype.load = function (url) {
 		url = this.template(url) //apply module variables
 		return Core.load.apply(Core, arguments);
 	}
@@ -1860,7 +2380,7 @@ IO:
 	Sandbox.prototype.Promise = Promise
 
 	//alternative way to add listener of core events. These events are removed on every stopping of Module, so they may be used in init()
-	Sandbox.prototype.listen = function(eventType, handler) {
+	Sandbox.prototype.listen = function (eventType, handler) {
 		if (eventType && handler && this.moduleName && ModulesRegistry[this.moduleName]) {
 			ModulesRegistry[this.moduleName].runtime_listen || (ModulesRegistry[this.moduleName].runtime_listen = {})
 			var listener = ModulesRegistry[this.moduleName].runtime_listen[eventType] || [];
@@ -1871,37 +2391,44 @@ IO:
 	}
 
 	//Generates action in Core with attached details.
-	Sandbox.prototype.action = function(actionType, detail) {
-		if (actionType && (actionType in Actions)) {
+	Sandbox.prototype.action = function (actionType, detail) {
+		var sandbox = this;
+		if (actionType) {
 			detail = (detail && typeof detail === 'object') ? detail : {}
-			var i = 0, func;
-			while (func = Actions[actionType][i++])
-				func(detail, {
-					type: actionType,
-					targetName: this.moduleName,
-					timeStamp: (new Date()).getTime(),
-					detail: detail
-				})
+			//async
+			setAsyncTask(function () {
+				var i = 0, handler;
+				if (actionType in Actions) {
+					while (handler = Actions[actionType][i++]) {
+						handler(detail, {
+							type: actionType,
+							targetName: sandbox.moduleName,
+							timeStamp: (new Date()).getTime(),
+							detail: detail
+						})
+					}
+				}
+			})
 		}
 		return this; // return Sandbox object
 	}
 
 	//Ads new templating rule for sandbox.template() call
-	Sandbox.addTemplateRule = function(regexp, result) {
+	Sandbox.addTemplateRule = function (regexp, result) {
 		SandboxTemplateRules.push({ regexp: regexp, result: result })
 	}
 
 	//module templating rules
 	Sandbox.addTemplateRule(/{module:url}/g, function (context) { return context.moduleUrl })
-	Sandbox.addTemplateRule(/{module:name}/g, function(context) { return context.moduleName })
+	Sandbox.addTemplateRule(/{module:name}/g, function (context) { return context.moduleName })
 	//Sandbox.addTemplateRule(/{data:.+}/g, function (context) { return ModulesRegistry[context.moduleName] ? (ModulesRegistry[context.moduleName].body.data || '') : undefined })
 
 
-	
+
 
 
 	/* Templater factory */
-	
+
 	var Templater = function (sandbox) {
 		var context = sandbox || {}; //context is a module sandbox
 
@@ -1909,26 +2436,26 @@ IO:
 			if (!(typeof string == 'string' || string instanceof String)) return '';
 			var i, rule,
 				parseRule = function (rule) {
-				var regexp = rule.regexp,
-					result = (typeof rule.result === 'function') ? rule.result(context) : rule.result;
+					var regexp = rule.regexp,
+						result = (typeof rule.result === 'function') ? rule.result(context) : rule.result;
 
-				if (result !== undefined && result !== null) {
-					string = string.replace(regexp, result)
-				}
-			};
+					if (result !== undefined && result !== null) {
+						string = string.replace(regexp, result)
+					}
+				};
 			//parse context rules first
 			if (sandbox) {
 				i = SandboxTemplateRules.length
-				while (rule = SandboxTemplateRules[i-=1]) {
+				while (rule = SandboxTemplateRules[i -= 1]) {
 					parseRule(rule)
 				}
 			}
 			//then common rules
-			i = TemplateRules.length - 1
-			while (rule = TemplateRules[i-=1]) {
+			i = TemplateRules.length
+			while (rule = TemplateRules[i -= 1]) {
 				parseRule(rule)
 			}
-			
+
 			return string; //return new string
 		}
 	}
@@ -1936,20 +2463,20 @@ IO:
 	Core.template = Templater()
 
 	//Ads new templating rule for Core.template() call
-	Core.addTemplateRule = function(regexp, result) {
-		TemplateRules.push({regexp: regexp,	result: result})
+	Core.addTemplateRule = function (regexp, result) {
+		TemplateRules.push({ regexp: regexp, result: result })
 	}
 
 	//base Core variables
 	Core.addTemplateRule(/{baseUrl}/gi, function () { return Core.config.baseUrl })
 	//DOM
 	Core.addTemplateRule(/{location:protocol}/g, location.protocol)
-	Core.addTemplateRule(/{location:search}/g, function() { return location.search ? location.search.substr(1) : '' })
-	Core.addTemplateRule(/{location:url}/g, function() { return location.protocol ? (location.protocol + '//' + location.host + location.pathname) : '' })
-	Core.addTemplateRule(/{location:hash}/g, function() { return location.hash ? location.hash.substr(1) : '' })
+	Core.addTemplateRule(/{location:search}/g, function () { return location.search ? location.search.substr(1) : '' })
+	Core.addTemplateRule(/{location:url}/g, function () { return location.protocol ? (location.protocol + '//' + location.host + location.pathname) : '' })
+	Core.addTemplateRule(/{location:hash}/g, function () { return location.hash ? location.hash.substr(1) : '' })
 
 
-	
+
 
 
 
@@ -1957,15 +2484,15 @@ IO:
 
 
 	/*Utility Functions*/
-	
+
 	var Util = Core.Util = {} //private utilities
-		
+
 	//Limited frequency of function execution
-	Util.limited = function(func, ms) {
+	Util.limited = function (func, ms) {
 		var callRemains = false,
 			lastCallDate = null;
 		if (ms) { //use timeout
-			return function() {
+			return function () {
 				var context = this,
 					args = arguments,
 					nowDate = new Date().getTime();
@@ -1976,12 +2503,12 @@ IO:
 			}
 		}
 		else { //use animation frame
-			return function() {
+			return function () {
 				var context = this,
 					args = arguments;
 				if (!callRemains) {
 					callRemains = true
-					requestAnimationFrame(function() {
+					requestAnimationFrame(function () {
 						callRemains = false
 						func.apply(context, args)
 					})
@@ -1991,26 +2518,26 @@ IO:
 	}
 
 	//Delay function execution until rapid calling will end/stop
-	Util.deferred = function(func, ms) {
+	Util.deferred = function (func, ms) {
 		var timer = null;
 		if (ms) { //use timeout
-			return function() {
+			return function () {
 				var that = this,
 					args = arguments;
 				if (timer) { clearTimeout(timer) }
-				timer = setTimeout(function() {
+				timer = setTimeout(function () {
 					func.apply(that, args)
 					timer = null
 				}, ms)
 			}
 		}
 		else { //use animation frame
-			return function() {
+			return function () {
 				var context = this,
 					args = arguments;
 				if (timer) { clearTimeout(timer) }
-				timer = setTimeout(function() {
-					requestAnimationFrame(function() {
+				timer = setTimeout(function () {
+					requestAnimationFrame(function () {
 						func.apply(context, args)
 						timer = null
 					})
@@ -2020,7 +2547,7 @@ IO:
 	}
 
 	//Cross browser XmlHttpRequest constructor
-	Util.XHR = function() {
+	Util.XHR = function () {
 		var HttpRequest;
 		HttpRequest = (function () {
 			try { return new XMLHttpRequest() } catch (err) { }
@@ -2030,40 +2557,18 @@ IO:
 		if (!HttpRequest) {
 			HttpRequest = {}
 			HttpRequest.open = HttpRequest.send = noop
-			Core.error('No Support: XMLHttpRequest')
+			console.error('No Support: XMLHttpRequest')
 		}
 		return HttpRequest;
 	}
-
-	//Error line number absence fixing
-	Util.fixError = function(err) {
-		err.line = err.line || err.lineNumber || (function () {
-			if (!err.stack) return 0;
-			var Stacks = err.stack,
-				line;
-			//remove first message string in Chrome
-			Stacks = Stacks.replace(new RegExp('(\.+): ' + err.message + '\n'), '')
-			//devide errors in stack
-			Stacks = Stacks.split('\n')
-			//strip line number
-			line = Stacks[0].replace(/(\s+|\))$/i, '').match(/:\d(:?\d)*$/g)
-			line = (line && line.length) ? line[0].substr(1) : '*'
-			return line
-		}())
-		//try to find the file in what an error accured
-		err.source = (err.sourceURL || err.fileName || (function () {
-			return ''
-		}())).split('?')[0]
-		return err;
-	}
-
+	
 	//Request for text content of any file. Used for internal tasks.
-	Util._requestTextContent = function(url, isAsync) {
+	Util._requestTextContent = function (url, isAsync) {
 		return new Promise(function (complete, error) {
 			var xhr = new Util.XHR;
 			url = Core.template(url)
 			try {
-				xhr.open('GET', Core.config.cache ? url : Core.URL.randomize(url), isAsync)
+				xhr.open('GET', url, isAsync)
 				xhr.onreadystatechange = function () {
 					if (xhr.readyState == 4) {
 						//normal
@@ -2107,18 +2612,18 @@ IO:
 
 
 	//Evaluate JavaScript expression in closed function scope. `var` and `return` statements are not allowed
-	Util.execute = function(expression) {  //returns result
+	Util.execute = function (expression) {  //returns result
 		return (new Function('return (' + expression + ')'))();
 	}
 
 	//Call function asynchronously or not
-	Util.asyncCall = function(isAsync, func) {
+	Util.asyncCall = function (isAsync, func) {
 		return isAsync ? setTimeout_1(func) : (func(), undefined)
 	}
 
 	//Recursively merges one object to another
-	Util.merge = function(objTo, objFrom) {
-		var extend = function(objTo, objFrom) {
+	Util.merge = function (objTo, objFrom) {
+		var extend = function (objTo, objFrom) {
 			var i;
 			for (i in objFrom) {
 				if (!objFrom.hasOwnProperty(i)) continue;
@@ -2139,7 +2644,7 @@ IO:
 	}
 
 	//Parses string of CSS and correct all url() statements accordingly to new css-file location
-	Util.relocateCSS = function(cssText, oldCssLocation, newCssLocation) {
+	Util.relocateCSS = function (cssText, oldCssLocation, newCssLocation) {
 		if (!cssText) return '';
 		//defaults
 		if (!oldCssLocation && location.href) oldCssLocation = location.href
@@ -2158,7 +2663,8 @@ IO:
 		}
 
 		var isOldCssLocationAbsolute = /^(http|file|\/)/.test(oldCssLocation),
-			isNewCssLocationAbsolute = /^(http|file|\/)/.test(newCssLocation);
+			isNewCssLocationAbsolute = /^(http|file|\/)/.test(newCssLocation),
+			oldCssLocationOrigin = Core.URL.isExternal(oldCssLocation) ? Core.URL.parse(oldCssLocation).origin : '';
 
 		return cssText.replace(/url\(\"?'?(.+?)\"?'?\)/g, function (urlExpression, url) {
 			var PathDirs = oldCssLocation.split('/'),
@@ -2166,10 +2672,13 @@ IO:
 				currentUrl;
 
 			//if URL is absolute or data-URI
-			if (url.match(/^(http|data|file|\/)/)) {
+			if (url.match(/^(http|data|file)/)) {
 				return urlExpression; //return original expression
 			}
-
+				//if URL is relative from root
+			else if (url.match(/^\//)) {
+				return 'url(' + oldCssLocationOrigin + url + ')'
+			}
 				//eles URL is relative
 			else {
 				/*Now handle many different situations*/
@@ -2212,36 +2721,91 @@ IO:
 	}
 
 	//Inserts <style> element to document
-	Util.injectCSS = function(cssText, Attrs, el) {
+	Util.injectCSS = function (cssText, Attrs, el) { //returns style DOM object
 		// http://davidwalsh.name/add-rules-stylesheets
-		if (!document || !cssText) return null;
+		if (!cssText) return null;
 		var i, styleElem = el || document.createElement('style');
 		if (Attrs instanceof Object) {
 			for (i in Attrs) {
 				if (Attrs[i]) {
 					styleElem.setAttribute(i, Attrs[i] === true ? '' : Attrs[i])
+				} else {
+					styleElem.removeAttribute(i)
 				}
 			}
 		}
+		cssText += Attrs['data-src'] ? ('\n/*# sourceURL=' + encodeURI(Attrs['data-src'])) : '*/'
 		if (!el) { document.head.appendChild(styleElem) }
 		try {// Not IE
 			styleElem.appendChild(document.createTextNode(cssText))
 		} catch (err) {// IE
-			styleElem.styleSheet.cssText = cssText
+			styleElem.styleSheet.cssText += cssText
 		}
 		return styleElem;
 	}
-	
+
+	//Inserts content as HTML to document
+	Util.injectHTML = function (htmlText) { //returns text
+		if (!htmlText) return '';
+		if (document.readyState == 'loading') {
+			document.writeln(htmlText)
+		}
+		else {
+			if (document.body.insertAdjacentHTML) {
+				document.body.insertAdjacentHTML('beforeend', htmlText)
+			}
+			else {
+				//fallback
+				var node,
+					htmlContainer = document.createElement('div'),
+					docFragment = document.createDocumentFragment();
+
+				htmlContainer.innerHTML = htmlText
+				while (node = htmlContainer.firstChild) {
+					docFragment.appendChild(node)
+				}
+				document.body.appendChild(docFragment)
+			}
+		}
+		return htmlText
+	}
+
+	//Inserts <script> element to document
+	Util.injectJS = function (jsText, Attrs, el) { //returns script DOM object
+		if (!jsText) return null;
+		var i, scriptElem = el || document.createElement('script');
+		scriptElem.defer = false
+		scriptElem.async = false
+		if (Attrs instanceof Object) {
+			for (i in Attrs) {
+				if (Attrs[i]) {
+					scriptElem.setAttribute(i, Attrs[i] === true ? '' : Attrs[i])
+				} else {
+					scriptElem.removeAttribute(i)
+				}
+			}
+		}
+		jsText += Attrs['data-src'] ? ('\n//# sourceURL=' + encodeURI(Attrs['data-src'])) : ''
+		//catch error in IE
+		try {
+			scriptElem.innerHTML = jsText
+		} catch (err) {
+			scriptElem.text = jsText
+		}
+		if (!el) { document.head.appendChild(scriptElem) }
+		return scriptElem;
+	}
+
 	// Browser events
-	Util.addDOMEvent = function(elem, type, handler) {
+	Util.addDOMEvent = function (elem, type, handler) {
 		if (elem.attachEvent) {
 			elem['e' + type + handler] = handler
-			elem[type + handler] = function() { elem['e' + type + handler](window.event) }
+			elem[type + handler] = function () { elem['e' + type + handler](window.event) }
 			elem.attachEvent('on' + type, elem[type + handler])
 		} else if (elem.addEventListener)
 			elem.addEventListener(type, handler, false)
 	}
-	Util.removeDOMEvent = function(elem, type, handler) {
+	Util.removeDOMEvent = function (elem, type, handler) {
 		if (elem.detachEvent) {
 			elem.detachEvent('on' + type, elem[type + handler])
 			elem['e' + type + handler] = null
@@ -2249,29 +2813,32 @@ IO:
 		} else if (elem.removeEventListener)
 			elem.removeEventListener(type, handler, false)
 	}
-	
+
 
 	Core.URL = {} //Basic URL manipulation
 
 	//Adds a parameter with random value, if not exists
-	Core.URL.randomize = function(url) { //returns URL
+	Core.URL.randomize = function (url) { //returns URL
 		if (!/(\?|\&)rand=/.test(url)) {
-			return url + (url.indexOf('?') === -1 ? '?' : '&') + 'rand=' + (Math.random() * Math.pow(10,7)).toFixed(0)
+			return url + (url.indexOf('?') === -1 ? '?' : '&') + 'rand=' + (Math.random() * Math.pow(10, 7)).toFixed(0)
 		}
 		return url
 	}
 
 	//Checks if URL is not in the same domain
-	Core.URL.isExternal = function(url) {//returns Boolean
+	Core.URL.isExternal = function (url) {//returns Boolean
 		url = Core.template(url) //replace variables in url
 		return (
-			(/htt(p|ps):\/\//i.test(url))
-			&& !(new RegExp('htt(p|ps):\\/\\/' + location.hostname, 'i').test(url))
+			/^htt(p|ps):\/\//i.test(url)
+			&& (
+				!location.hostname
+				|| !(new RegExp('htt(p|ps):\\/\\/' + location.hostname, 'i').test(url))
+			)
 		)
 	}
 
 	//Synchronously checks file by url for existence/availability
-	Core.URL.isAvailable = function(url) { //returns Boolean
+	Core.URL.isAvailable = function (url) { //returns Boolean
 		var xhr = new Util.XHR;
 		url = Core.template(url)
 		try {
@@ -2290,7 +2857,7 @@ IO:
 	}
 
 	//Asynchronously checks file by url for existence/availability
-	Core.URL.isAvailableAsync = function(url) { //returns Promise
+	Core.URL.isAvailableAsync = function (url) { //returns Promise
 		return new Promise(function (available, error) {
 			var xhr = new Util.XHR;
 			url = Core.template(url)
@@ -2302,7 +2869,7 @@ IO:
 					switch (xhr.status) {
 						case 200: case 301: case 302: case 303: case 307:
 							available(true)//available
-							break; 
+							break;
 						case 0:
 							available(!/^https*:\/\//.test(url) && !!xhr.responseText)//local
 							break;
@@ -2324,22 +2891,41 @@ IO:
 		url = url.trim()
 		url = url.replace(/^\/\//g, httpProtocol + '//')//protocol autocomplete
 		url = url.replace(/\\/g, '/')//normalize slashes 
-		url = url.replace(/^.\//, '')//remove first relative mark
+		url = url.replace(/^\.\//, '')//remove first relative mark
 		url = url.replace(/\/+$/, '')//remove last slash
+		url = url.replace(/(?:&)*\w+=(?=[&#]|$)/g, '').replace(/&+/g, '&')//remove falsy query params
 		return url;
 	}
 
+	//Parses string as URL expression
+	Core.URL.parse = function (url) {
+		url = Core.URL.normalize(url)
+		var match = url.match(/^(?:([a-z]*):)?(?:\/\/)?(?:([^:@]*)(?::([^@]*))?@)?([a-z-._]+)?(?::([0-9]*))?(\/[^?#]*)?(?:\?([^#]*))?(?:#(.*))?$/i) || [],
+			uri = {};
+		uri.href = match[0]
+		uri.protocol = match[1] ? match[1] + ':' : ''
+		uri.user = match[2] || ''
+		uri.password = match[3] || ''
+		uri.hostname = match[4] || ''
+		uri.port = match[5] || ''
+		uri.host = uri.hostname + (uri.port ? (':' + uri.port) : '')
+		uri.origin = (uri.protocol ? uri.protocol + '//' : '') + uri.host
+		uri.pathname = match[6] || ''
+		uri.search = match[7] || ''
+		uri.hash = match[8] || ''
+		return uri;
+	}
 
 	Core.JSON = {}//Basic JSON manipulation
 	Core.JSON.parse = global.JSON ? JSON.parse : Util.execute
-	Core.JSON.stringify = global.JSON ? JSON.stringify : function(value) {
+	Core.JSON.stringify = global.JSON ? JSON.stringify : function (value) {
 		return (function stringify(value) {
 			var k, Items;
 			if (!value) {
 				return String(value)
 			}
 			else {
-				switch (Object.prototype.toString.call(value)){
+				switch (Object.prototype.toString.call(value)) {
 					case '[object Function]':
 						return 'undefined';
 					case '[object Object]':
@@ -2363,105 +2949,94 @@ IO:
 
 
 
-	
 
 
 
 
 
-	// Error handler
-	Core.error = function(/*arguments*/) {
-		var i = 0, msg, Err = [];
 
-		//join all messages and error objects from arguments to one string
-		while (msg = arguments[i++]) {
-			Err.push(((msg.message) ? (msg.name +': '+ msg.message) : msg))
-		}
-		console.error(Err.join(' '))
-		return this;
-	}
 
 	//App configuration.
 	Core.config = {
 		//Default home URL
 		baseUrl: location.href ? (location.protocol + '//' + location.host + location.pathname.substr(0, location.pathname.lastIndexOf('/'))) : '',
 		cache: false, //browser default http cache
-		cacheImages: false, //cache image resources. Ignored if `cache` is false
-		cacheMedia: false //cache media resources. Ignored if `cache` is false
+		cacheImages: true, //cache image resources. Ignored if `cache` is false
+		cacheMedia: true //cache media resources. Ignored if `cache` is false
 	}
-	
+
 	// Send global events
-	Core.invoke = function(eventType, detail) {
-		if (!eventType) return;
-		detail = (detail && typeof detail === 'object') ? detail : {}
-		var i, n, handler;
-		
-		//find handlers in Core listeners collection
-		if (eventType in Events) {
-			n = 0;
-			while (handler = Events[eventType][n++]) {
-				handler(detail)
-			}
-		}
+	Core.invoke = function (eventType, detail) {
+		if (eventType) {
+			detail = (detail && typeof detail === 'object') ? detail : {}
 
+			//async
+			setAsyncTask(function () {
+				var i, n, handler;
 
-		for (i in ModulesRegistry) {
-			//find handlers in module 'listen' collection
-			if (
-				ModulesRegistry[i]
-				&& ModulesRegistry[i].initiated
-				&& 'listen' in ModulesRegistry[i].body
-				&& eventType in ModulesRegistry[i].body.listen
-			) {
-				//single function
-				if (typeof ModulesRegistry[i].body.listen[eventType] === 'function') {
-					try {//catch errors without stopping app execution
-						ModulesRegistry[i].body.listen[eventType](detail)
-					} catch (err) {
-						Util.fixError(err) //implement err.line
-						Core.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + ':' + err.line + ']', err)
+				//find handlers in Core listeners collection
+				if (eventType in Events) {
+					n = 0;
+					while (handler = Events[eventType][n++]) {
+						handler(detail)
 					}
 				}
-					//array of functions
-				else if (ModulesRegistry[i].body.listen[eventType].length) {
-					n = 0;
-					while (handler = ModulesRegistry[i].body.listen[eventType][n++]) {
-						try {//catch errors without stopping app execution
-							handler(detail)
-						} catch (err) {
-							Util.fixError(err) //implement err.line
-							Core.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']', err)
+
+				for (i in ModulesRegistry) {
+					//find handlers in module 'listen' collection
+					if (
+						ModulesRegistry[i]
+						&& ModulesRegistry[i].initiated
+						&& 'listen' in ModulesRegistry[i].body
+						&& eventType in ModulesRegistry[i].body.listen
+					) {
+						//single function
+						if (typeof ModulesRegistry[i].body.listen[eventType] === 'function') {
+							try {//catch errors without stopping app execution
+								ModulesRegistry[i].body.listen[eventType](detail)
+							} catch (err) {
+								console.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + ':' + err.line + ']' + ' ' + errorAsString(err))
+							}
+						}
+							//array of functions
+						else if (ModulesRegistry[i].body.listen[eventType].length) {
+							n = 0;
+							while (handler = ModulesRegistry[i].body.listen[eventType][n++]) {
+								try {//catch errors without stopping app execution
+									handler(detail)
+								} catch (err) {
+									console.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']' + ' ' + errorAsString(err))
+								}
+							}
+
+						}
+					}
+
+					//find handlers in module 'runtime_listen' collection
+					if (
+						ModulesRegistry[i]
+						&& ModulesRegistry[i].initiated
+						&& ModulesRegistry[i].body['runtime_listen']
+						&& eventType in ModulesRegistry[i].body.runtime_listen
+					) {
+						n = 0;
+						while (handler = ModulesRegistry[i].body.runtime_listen[eventType][n++]) {
+							try {//catch errors without stopping app execution
+								handler(detail)
+							} catch (err) {
+								console.error('[Module: ' + ModulesRegistry[i].name + ':runtime_listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']' + ' ' + errorAsString(err))
+							}
 						}
 					}
 
 				}
-			}
-
-			//find handlers in module 'runtime_listen' collection
-			if (
-				ModulesRegistry[i]
-				&& ModulesRegistry[i].initiated
-				&& ModulesRegistry[i].body['runtime_listen']
-				&& eventType in ModulesRegistry[i].body.runtime_listen
-			) {
-				n = 0;
-				while (handler = ModulesRegistry[i].body.runtime_listen[eventType][n++]) {
-					try {//catch errors without stopping app execution
-						handler(detail)
-					} catch (err) {
-						Util.fixError(err) //implement err.line
-						Core.error('[Module: ' + ModulesRegistry[i].name + ':runtime_listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']', err)
-					}
-				}
-			}
-		
+			})
 		}
-		
-		return this;
+		return this; // return Core object
 	}
 
 	// Adds Core event listeners in runtime. This is an alternative way to add listener of Core events.
-	Core.listen = function(eventType, handler) {
+	Core.listen = function (eventType, handler) {
 		var listener;
 		if (eventType && handler) {
 			listener = Events[eventType] || [];
@@ -2471,16 +3046,23 @@ IO:
 		return this;  // return Core object
 	}
 	// Generates action in Core with attached details
-	Core.action = function(actionType, detail) {
-		if (eveactionTypent && (actionType in Actions)) {
-			var i = 0, func;
-			while (func = Actions[actionType][i++])
-				func(detail, {
-					type: actionType,
-					targetName: 'Core',
-					timeStamp: (new Date()).getTime(),
-					detail: detail
-				})
+	Core.action = function (actionType, detail) {
+		if (actionType) {
+			detail = (detail && typeof detail === 'object') ? detail : {}
+			//async
+			setAsyncTask(function () {
+				var i = 0, handler;
+				if (actionType in Actions) {
+					while (handler = Actions[actionType][i++]) {
+						handler(detail, {
+							type: actionType,
+							targetName: 'Core',
+							timeStamp: (new Date()).getTime(),
+							detail: detail
+						})
+					}
+				}
+			})
 		}
 		return this; // return Core object
 	}
@@ -2488,9 +3070,9 @@ IO:
 
 
 
-	
+
 	// 'layout-update' defaults
-	Core.listen('layout-update', function(detail) {
+	Core.listen('layout-update', function (detail) {
 		('width' in detail) || (detail.width = document.documentElement.offsetWidth);
 		('height' in detail) || (detail.height = document.documentElement.offsetHeight);
 		('orientation' in detail) || (
@@ -2506,9 +3088,9 @@ IO:
 	// bind DOM event to action 
 	Core.DOMReady.then(function () { Core.invoke('app-ready') })
 	Core.DOMLoaded.then(function () { Core.invoke('app-load') })
-	
+
 	//layout event
-	Util.addDOMEvent(window, 'resize', Util.limited(function() {
+	Util.addDOMEvent(window, 'resize', Util.limited(function () {
 		Core.invoke('layout-update')
 	}))
 	Core.DOMReady.then(function () {
@@ -2521,7 +3103,7 @@ IO:
 
 
 	//Feature detection collection
-	Core.Features =  {
+	Core.Features = {
 		'touch': document && (('createTouch' in document) || (/android|blackberry/i.test(navigator.userAgent) && 'ontouchstart' in window)),
 		'retina': (function () {
 			return (
@@ -2531,7 +3113,7 @@ IO:
 			) ? true : false
 		}())
 	}
-	
+
 
 
 
@@ -2540,9 +3122,9 @@ IO:
 
 	/*Core public interface */
 	//Method for extending Core.config object. Old values will be overwritten with new ones
-	Core.configure = function(config) {
+	Core.configure = function (config) {
 		if (!config) return
-		var	url = (typeof config === 'string') ? Core.template(config) : '';
+		var url = (typeof config === 'string') ? Core.template(config) : '';
 
 		//if argument is config file url
 		if (url && Core.URL.isAvailable(url)) {
@@ -2561,31 +3143,28 @@ IO:
 
 	//Includes files in document, if they are available: index.html, style.css, ie.css, register.js
 	Core.include = function (path) {
-		if (!path) return
-		path = path.replace(/\/+$/, '')//remove last dash
-		var Proms = [],
-			template = Templater({
-				moduleUrl: path /*future module info*/
-			});
+		if (!path) return;
+		path = Core.URL.normalize(path)
+		var Proms = [];
 
 		//css
 		Proms.push(Core.load(path + '/style.css', 'defer'))
-		if (isOldIE) { //always for IE <=8
-			Proms.push(Core.load(path + '/ie.css', 'defer'))
-		}
+		//always for IE <=8
+		isOldIE && Proms.push(Core.load(path + '/ie.css', 'defer'))
+
 
 		//html
-		//setup unknown type to prevent insertion into document by default
+		//setup unknown type to prevent variables parsing by default
 		if (Core.URL.isAvailable(path + '/index.html')) {
 			Proms.push(Core.load(path + '/index.html', { type: 'unknown' }).then(function (text) {
-				text = template(text)
-				document.writeln(text)
+				text = Templater({ moduleUrl: path })(text)
+				Util.injectHTML(text)
 				return text;
 			}))
 		}
 
 		//js
-		Proms.push(Core.load(path + '/register.js', 'defer reload').then(function () {
+		Proms.push(Core.load(path + '/register.js', 'defer reload cache').then(function () {
 			if (!lastRegisteredModuleName) return;
 			var module = ModulesRegistry[lastRegisteredModuleName]
 			module.url = module.sandbox.moduleUrl = path
@@ -2598,7 +3177,7 @@ IO:
 		return Promise.any(Proms);
 	}
 
-	Core.register = function(moduleName, moduleBody) {
+	Core.register = function (moduleName, moduleBody) {
 		var sandbox;
 		//`moduleBody` may be object or function-constructor that returns object.
 		if (typeof moduleBody === 'function') {
@@ -2611,12 +3190,20 @@ IO:
 			ModulesRegistry[moduleName] = new Module(moduleName, moduleBody)
 			ModulesRegistry[moduleName].sandbox = sandbox
 			lastRegisteredModuleName = moduleName
+			//AMD compatibility
+			if (isAMD) { //if AMD loader was used
+				define(ModulesRegistry[moduleName].body)
+			}
+			else if (typeof define === 'function' && define.amd) { //if another type of loading was used
+				define(moduleName, ModulesRegistry[moduleName].body)
+			}
+
 		}
 		//else cancel registration
 		return this;
 	}
 
-	Core.start = function(/*args*/) {
+	Core.start = function (/*args*/) {
 		var module,
 			moduleName,
 			length = arguments.length,
@@ -2627,7 +3214,7 @@ IO:
 			module = ModulesRegistry[moduleName]
 			if (!module) { continue; }//ignore unexisting modules
 			Proms.push(module.start().then(null, function (err) {
-				Core.error('[Module: ' + module.name + ':init:' + err.line + ']', err)
+				console.error('[Module: ' + module.name + ':init:' + err.line + ']' + ' ' + errorAsString(err))
 			}))
 		}
 
@@ -2636,8 +3223,8 @@ IO:
 			(length > 1) ? null : function (errors) { return errors[0] }
 		);
 	}
-	
-	Core.stop = function(/*args*/) {
+
+	Core.stop = function (/*args*/) {
 		var module,
 			moduleName,
 			length = arguments.length,
@@ -2648,7 +3235,7 @@ IO:
 			module = ModulesRegistry[moduleName]
 			if (!module) { continue; }//ignore unexisting modules
 			Proms.push(module.stop().then(null, function (err) {
-				Core.error('[Module: ' + module.name + ':destroy:' + err.line + ']', err)
+				console.error('[Module: ' + module.name + ':destroy:' + err.line + ']' + ' ' + errorAsString(err))
 			}))
 		}
 
@@ -2657,70 +3244,86 @@ IO:
 			(length > 1) ? null : function (errors) { return errors[0] }
 		);
 	}
-	
-	Core.startAll = function() {
+
+	Core.startAll = function () {
 		var moduleName, Proms = [];
 		for (moduleName in ModulesRegistry) { Proms.push(Core.start(moduleName)) }
 		return Promise.any(Proms);
 	}
 
-	Core.stopAll = function() {
+	Core.stopAll = function () {
 		var moduleName, Proms = [];
 		for (moduleName in ModulesRegistry) { Proms.push(Core.stop(moduleName)) }
 		return Promise.any(Proms);
 	}
 
 	//Extends Core object with new properties and methods.
-	Core.extend = function(extendFunc) {
-		var obj, i, j;
+	Core.extend = function (extendFunc) {
+		var extendObject, i, j;
 
 		if (typeof extendFunc !== 'function' && (typeof extendFunc !== 'object' || (extendFunc instanceof Array))) {
-			Core.error('Core.extend() argument must be a function or object.')
+			console.error('Core.extend() argument must be a function or object.')
 			return
 		}
 
-		obj = (typeof extendFunc === 'function') ? extendFunc(Core, Sandbox) : extendFunc
+		extendObject = (typeof extendFunc === 'function') ? extendFunc(Core, Sandbox) : extendFunc
 
-		if (!obj) return
+		if (!extendObject) return
 
-		for (i in obj) {
-			if (i in Core) {
+		for (i in extendObject) {
+			if (i == 'Actions' || i == 'actions'/*for backward compatability*/) {
+				for (j in extendObject[i]) {
+					if (typeof extendObject[i][j] === 'function') {
+						Actions[j] = (j in Actions) ? Actions[j].concat([extendObject[i][j]]) : [extendObject[i][j]]
+					}
+					else if (extendObject[i][j].length) {//type array
+						Actions[j] = (j in Actions) ? Actions[j].concat(extendObject[i][j]) : extendObject[i][j]
+					}
+				}
+			}
+			else if (i in Core) {
 				if (/^(register|start|stop|startAll|stopAll|extend|invoke|listen|actionload|template)$/.test(i)) {
-					Core.error('"' + i + '" feature is not extendable')
+					console.error('"' + i + '" feature is not extendable')
 					continue
 				}
-				for (j in obj[i]) {
-					if (i == 'Actions' || i == 'actions'/*for backward compatability*/) {
-						if (typeof obj[i][j] === 'function') {
-							Actions[j] = (j in Actions) ? Actions[j].concat([obj[i][j]]) : [obj[i][j]]
-						}
-						else if (obj[i][j].length)//type array
-							Actions[j] = (j in Actions) ? Actions[j].concat(obj[i][j]) : obj[i][j]
-					} else
-						Core[i][j] = obj[i][j]
+				for (j in extendObject[i]) {
+					Core[i][j] = extendObject[i][j]
 				}
 			} else {
-				Core[i] = obj[i]
+				Core[i] = extendObject[i]
 			}
 		}
-		
+
+		//AMD compatibility
+		if (typeof define === 'function' && define.amd) {
+			define(extendObject)
+		}
+
 		return this;
 	}
-	
+
 
 	//Expose Core as a module, that is compatible witn CommonJS and AMD
-	;(function (global, factory) {
+	; (function (global, factory) {
 		//NodeJS
 		if (typeof exports === 'object') {
 			module.exports = factory()
 		}
-		//AMD
-		else if (typeof define === 'function' && define.amd) {
-			(document && document.body) ? define(factory) : define('Core', [], factory)
-		}
-		//Expose public Core interface object
+			//Expose public Core interface object
 		else if (global) {
+			if (isAMD) {//if requested with AMD loader
+				define(factory)
+			}
+			else {//or included in <head>
+				//AMD compatibility
+				if (typeof define === 'function' && define.amd) {
+					define('Core', factory)
+					define('Sandbox', function () { return Sandbox })
+				}
+			}
+
 			global.Core = {
+				configure: Core.configure,
 				load: Core.load,
 				UIReady: Core.UIReady,
 				DOMReady: Core.DOMReady,
@@ -2731,10 +3334,12 @@ IO:
 				stop: Core.stop,
 				startAll: Core.startAll,
 				stopAll: Core.stopAll,
-				extend: Core.extend,
-				configure: Core.configure
+				extend: Core.extend
 			}
-		}
-	}(global, function() { return Core }))
 
-}((typeof window !== 'undefined') ? window : undefined, (typeof global !== 'undefined') ? global : undefined))
+
+
+		}
+	}(global, function () { return Core }))
+
+}(this.window, this.global, this))

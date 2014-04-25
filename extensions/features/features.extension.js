@@ -92,7 +92,7 @@ Core.extend(function (Core) {
 
 	return {
 		Features: {
-			'css-transform3d': checkCSS('perspectiveProperty'),
+			'css-transform-3d': checkCSS('perspectiveProperty'),
 			'css-transform': checkCSS('transformProperty'),
 			'css-transition': checkCSS('transitionProperty'),
 			'css-animation': checkCSS('animationName'),
@@ -132,7 +132,12 @@ Core.extend(function (Core) {
 					fileInput.setAttribute('type', 'file')
 					fileInput.style.display = 'none'
 					document.body.appendChild(fileInput)
-					if (fileInput.disabled || fileInput.type != 'file') {
+					if (
+						fileInput.disabled
+						|| fileInput.type != 'file'
+						//browser sniffing for Windows Phone, because no another way
+						|| (navigator.userAgent && navigator.userAgent.match(/Windows Phone (OS 7|8)/))
+					) {
 						return false; //not supported
 					}
 				} catch (err) {
@@ -144,10 +149,10 @@ Core.extend(function (Core) {
 			}()),
 
 			//localStorage, sessionStorage
-			'js-webStorage': (('localStorage' in window) && window['localStorage'] !== null),
+			'js-web-storage': (('localStorage' in window) && window['localStorage'] !== null),
 
 			//querySelector
-			'js-querySelector': (!!document.querySelector && !!document.querySelectorAll)
+			'js-query-selector': (!!document.querySelector && !!document.querySelectorAll)
 
 
 			//detect mouse device/browser

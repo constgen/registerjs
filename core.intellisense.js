@@ -3,11 +3,17 @@
 //http://msdn.microsoft.com/en-us/library/microsoft.visualstudio.language.intellisense.standardglyphgroup.aspx?cs-save-lang=1&cs-lang=jscript#code-snippet-1
 
 
-/// <var>Application Core global namespace.</var>
-var Core = {};
 
 (function() {
-	var undefined;
+	var undefined,
+		CorePublicOrigin = Core,
+		CorePrivateOrigin,
+		SandboxOrigin;
+
+	CorePublicOrigin.extend(function (Core, Sandbox) {
+		CorePrivateOrigin = Core
+		SandboxOrigin = Sandbox
+	})
 
 	//Mysterious `_$createEventManager` function, that was found in VS Reference sources. It does magic for function parameters reference.
 	var _eventManager = _$createEventManager(function () {
@@ -108,7 +114,7 @@ var Core = {};
 		/// <returns type="Boolean">true or false.</returns>
 	}
 
-	var PrivateCore = {
+	var CorePrivate = {
 		template: Templater(),
 		addTemplateRule: function(regexp, result) {
 			///	<signature>
@@ -127,13 +133,13 @@ var Core = {};
 			/// <signature>
 			/// <summary>1. Loads any resource that you can imagine by URL.</summary>
 			/// <param name="src" type="String">Path to resource to be loaded.</param>
-			/// <param name="options" type="Object" optional="true" value="{defer: false, async: false, reload: false}">Options.</param>
+			/// <param name="options" type="Object" optional="true" value="{defer: false, async: false, reload: false, cache: undefined}">Options.</param>
 			/// <returns type="Promise">Result of resource load.</returns>
 			/// </signature>
 			/// <signature>
 			/// <summary>2. Loads any resources that you can imagine by URLs.</summary>
 			/// <param name="Srcs" type="Array" elementType="String">Array of paths to resources to be loaded.</param>
-			/// <param name="options" type="Object" optional="true" value="{defer: false, async: false, reload: false}">Options.</param>
+			/// <param name="options" type="Object" optional="true" value="{defer: false, async: false, reload: false, cache: undefined}">Options.</param>
 			/// <returns type="Promise">Result of all resources load.</returns>
 			/// </signature>
 			/// <signature>
@@ -158,7 +164,7 @@ var Core = {};
 				/// <returns type="Function">New function, that can't execute frequently.</returns>
 			},
 			deferred: function(func, ms) {
-				/// <summary>Delay function execution until rapid calling will end/stop.</summary>
+				/// <summary>Delay function execution until frequent calling will end/stop.</summary>
 				/// <param name="func" type="Function">Original function.</param>
 				/// <param name="ms" type="Number" optional="true">Delay in milliseconds.</param>
 				/// <returns type="Function">New function, that is executed only once after all frequent calls stop.</returns>
@@ -166,13 +172,6 @@ var Core = {};
 			XHR: function() {
 				/// <summary>Cross browser XmlHttpRequest constructor for AJAX requests.</summary>
 				/// <returns type="Object">XmlHttpRequest object.</returns>
-			},
-			fixError: function(err) {
-				/// <summary>Adds absent properties `line` and `source` to the Error object if possible.</summary>
-				/// <param name="err" type="Error">Error object.</param>
-				/// <returns type="Error">The same fixed error object.</returns>
-				//try to find the line where an error accured
-
 			},
 			_requestTextContent: function(url, isAsync) {
 				/// <summary>Request for text content of any file. Used for internal tasks.</summary>
@@ -229,6 +228,18 @@ var Core = {};
 				/// <param name="el" type="HTMLElement" optional="true">Existing STYLE element, to which insert styles.</param>
 				/// <returns type="HTMLElement">STYLE object.</returns>
 			},
+			injectJS: function (jsText, Attrs, el) {
+				/// <summary>Insert SCRIPT element to document.</summary>
+				/// <param name="jsText" type="String">JavaScript expression to be injected.</param>
+				/// <param name="Attrs" type="Object" optional="true">HTML attributes of new DOM element.</param>
+				/// <param name="el" type="HTMLElement" optional="true">Existing SCRIPT element, to which insert expression.</param>
+				/// <returns type="HTMLElement">SCRIPT object.</returns>
+			},
+			injectHTML: function (htmlText) {
+				/// <summary>Inserts content as HTML to document.</summary>
+				/// <param name="htmlText" type="String">Text content to be injected.</param>
+				/// <returns type="String">String of text content.</returns>
+			},
 			addDOMEvent: function(elem, type, handler) {
 				/// <summary>Crossbrowser add event listener.</summary>
 				/// <param name="elem" type="HTMLElement">Element.</param>
@@ -280,19 +291,14 @@ var Core = {};
 				/// <param name="url" type="String">URL or path string.</param>
 				/// <returns type="String">Valid URL.</returns>
 				/// </signature>
+			},
+			parse: function (url) {
+				/// <signature>
+				/// <summary>Parses string as URL expression.</summary>
+				/// <param name="url" type="String">URL or path string.</param>
+				/// <returns type="Object">Object, that represents URL parts.</returns>
+				/// </signature>
 			}
-		},
-		error: function(/*arguments*/) {
-			/// <signature>
-			/// <summary>Proxy for error messaging. Supports multiple arguments, that will be joined with spaces.</summary>
-			/// <param name="message" type="String" parameterArray="true">Error message</param>
-			/// <returns type="Object">Core</returns>
-			/// </signature>
-			/// <signature>
-			/// <summary>Proxy for error messaging. Supports multiple arguments, that will be joined with sapces.</summary>
-			/// <param name="error" type="Error" parameterArray="true">Error object</param>
-			/// <returns type="Object">Core</returns>
-			/// </signature>
 		},
 		/// <field type='Object'>App configuration.</field>
 		config: {
@@ -389,21 +395,21 @@ var Core = {};
 		extend: undefined //will be defined later
 	}
 
-	var PublicCore = {
-		load: PrivateCore.load,
+	var CorePublic = {
+		load: CorePrivate.load,
 		/// <field type='Promise'>Promise of document 'DOMContentLoaded'.</field>
-		DOMReady: PrivateCore.DOMReady,
+		DOMReady: CorePrivate.DOMReady,
 		/// <field type='Promise'>Promise of window 'load'.</field>
-		DOMLoaded: PrivateCore.DOMLoaded,
+		DOMLoaded: CorePrivate.DOMLoaded,
 		/// <field type='Promise'>Promise of included and loaded UI modules.</field>
-		UIReady: PrivateCore.UIReady,
-		configure: PrivateCore.configure,
-		include: PrivateCore.include,
-		register: PrivateCore.register,
-		start: PrivateCore.start,
-		stop: PrivateCore.stop,
-		startAll: PrivateCore.startAll,
-		stopAll: PrivateCore.stopAll,
+		UIReady: CorePrivate.UIReady,
+		configure: CorePrivate.configure,
+		include: CorePrivate.include,
+		register: CorePrivate.register,
+		start: CorePrivate.start,
+		stop: CorePrivate.stop,
+		startAll: CorePrivate.startAll,
+		stopAll: CorePrivate.stopAll,
 		extend: function(extendFunc) {
 			/// <signature>
 			/// <summary>Extends Core object with new properties and methods.</summary>
@@ -415,13 +421,13 @@ var Core = {};
 			/// <param name="extendObject" type="Object">Object to be merged to Core.</param>
 			/// <returns type="Object">Core</returns>
 			/// </signature>
-			_eventManager.add(this, 'extend', func.bind(undefined, PrivateCore, Sandbox))//do magic
+			_eventManager.add(this, 'extend', extendFunc.bind(undefined, CorePrivate, Sandbox))//do magic
 			return this;
 		}
 	}
 
 	//define private `extend` method
-	PrivateCore.extend = PublicCore.extend
+	CorePrivate.extend = CorePublic.extend
 
 	var Sandbox = function(moduleName) {
 		/// <summary>Creates new sandbox instance, that may serve some module.</summary>
@@ -474,8 +480,16 @@ var Core = {};
 		/// </signature>
 	}
 	
-	//refer global object
-	Core = PublicCore
+	//refer comments to original object
+	intellisense.annotate(window, {
+		/// <var>Application Core global namespace.</var>
+		Core: {}
+	})
+	intellisense.annotate(CorePublicOrigin, CorePublic)
+	intellisense.annotate(CorePrivateOrigin, CorePrivate)
+	intellisense.annotate(SandboxOrigin, Sandbox)
+	intellisense.annotate(SandboxOrigin.prototype, Sandbox.prototype)
+	
 								/*Reference END*/
 
 
@@ -513,7 +527,7 @@ var Core = {};
 
 	intellisense.addEventListener('statementcompletion', function(e) {
 		//filter unnecessary properties in `Core` object
-		if (e.targetName === 'Core') {
+		if (/^core$/i.test(e.targetName)) {
 			e.items = e.items.filter(function(item) {
 				return !(item.value && item.value.toString && /\[native\scode\]/.test(item.value.toString()));
 			})
