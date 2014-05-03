@@ -20,7 +20,7 @@ IO:
 		location = window.location,
 
 		/*internal*/
-		Core = { version: '3.4.2' }, // Application Core
+		Core = { version: '3.4.3' }, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
