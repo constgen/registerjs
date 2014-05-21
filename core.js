@@ -1,6 +1,6 @@
 ﻿/*
-Version 3.4.3
-Compatible with: NodeJS, AMD.
+Version 3.4.4
+Compatible with: NodeJS, AMD, WinRT.
 
 IO:
 	out:
@@ -20,7 +20,7 @@ IO:
 		location = window.location,
 
 		/*internal*/
-		Core = { version: '3.4.3' }, // Application Core
+		Core = { version: '3.4.4' }, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
@@ -44,7 +44,8 @@ IO:
 		setInterval_15 = function (func) { return setInterval(func, 15) },
 		isOldIE = '\v' == 'v', //!-[1,] 
 		isAMD = !!(typeof define === 'function' && define.amd && document && document.body), //was AMD loader used?
-
+		isWinRT = !!window.Windows && !!window.MSApp && /^ms-appx:/.test(location.href),
+		
 		/*often used*/
 		lowerThanWebkitVersion = function (version) {
 			if (!navigator.userAgent) return false;
@@ -2724,18 +2725,17 @@ IO:
 	Util.injectCSS = function (cssText, Attrs, el) { //returns style DOM object
 		// http://davidwalsh.name/add-rules-stylesheets
 		if (!cssText) return null;
+		Attrs = (Attrs instanceof Object) ? Attrs : {}
 		var i, styleElem = el || document.createElement('style');
-		if (Attrs instanceof Object) {
-			for (i in Attrs) {
-				if (Attrs[i]) {
-					styleElem.setAttribute(i, Attrs[i] === true ? '' : Attrs[i])
-				} else {
-					styleElem.removeAttribute(i)
-				}
+		for (i in Attrs) {
+			if (Attrs[i]) {
+				styleElem.setAttribute(i, Attrs[i] === true ? '' : Attrs[i])
+			} else {
+				styleElem.removeAttribute(i)
 			}
 		}
 		cssText += Attrs['data-src'] ? ('\n/*# sourceURL=' + encodeURI(Attrs['data-src'])) : '*/'
-		if (!el) { document.head.appendChild(styleElem) }
+		if (!el || !el.parentNode) { document.head.appendChild(styleElem) }
 		try {// Not IE
 			styleElem.appendChild(document.createTextNode(cssText))
 		} catch (err) {// IE
@@ -2747,12 +2747,20 @@ IO:
 	//Inserts content as HTML to document
 	Util.injectHTML = function (htmlText) { //returns text
 		if (!htmlText) return '';
+		var parentElem = document.body || document.head;
 		if (document.readyState == 'loading') {
-			document.writeln(htmlText)
+			//deal with CSP
+			if (typeof MSApp !== 'undefined') {
+				MSApp.execUnsafeLocalFunction(function () {
+					document.writeln(htmlText)
+				})
+			} else {
+				document.writeln(htmlText)
+			}
 		}
 		else {
-			if (document.body.insertAdjacentHTML) {
-				document.body.insertAdjacentHTML('beforeend', htmlText)
+			if (parentElem.insertAdjacentHTML) {
+				parentElem.insertAdjacentHTML('beforeend', htmlText)
 			}
 			else {
 				//fallback
@@ -2764,54 +2772,68 @@ IO:
 				while (node = htmlContainer.firstChild) {
 					docFragment.appendChild(node)
 				}
-				document.body.appendChild(docFragment)
+				parentElem.appendChild(docFragment)
 			}
 		}
-		return htmlText
+		return htmlText;
 	}
 
 	//Inserts <script> element to document
 	Util.injectJS = function (jsText, Attrs, el) { //returns script DOM object
 		if (!jsText) return null;
+		Attrs = (Attrs instanceof Object) ? Attrs : {}
 		var i, scriptElem = el || document.createElement('script');
 		scriptElem.defer = false
 		scriptElem.async = false
-		if (Attrs instanceof Object) {
-			for (i in Attrs) {
-				if (Attrs[i]) {
-					scriptElem.setAttribute(i, Attrs[i] === true ? '' : Attrs[i])
-				} else {
-					scriptElem.removeAttribute(i)
-				}
+		for (i in Attrs) {
+			if (Attrs[i]) {
+				scriptElem.setAttribute(i, Attrs[i] === true ? '' : Attrs[i])
+			} else {
+				scriptElem.removeAttribute(i)
 			}
 		}
 		jsText += Attrs['data-src'] ? ('\n//# sourceURL=' + encodeURI(Attrs['data-src'])) : ''
-		//catch error in IE
-		try {
-			scriptElem.innerHTML = jsText
-		} catch (err) {
-			scriptElem.text = jsText
+		//deal with CSP
+		if (typeof MSApp !== 'undefined') {
+			MSApp.execUnsafeLocalFunction(function () {
+				scriptElem.innerHTML = jsText
+			})
+		} else {
+			//insert text in crossbrowser way
+			if ('text' in scriptElem) { //ie8-
+				scriptElem.text = jsText
+			}
+			else if ('textContent' in scriptElem) {//normal
+				scriptElem.textContent = jsText
+			}
+			else {//fallback
+				scriptElem.innerHTML = jsText
+			}
 		}
-		if (!el) { document.head.appendChild(scriptElem) }
+		if (!el || !el.parentNode) { document.head.appendChild(scriptElem) }
 		return scriptElem;
 	}
 
 	// Browser events
 	Util.addDOMEvent = function (elem, type, handler) {
-		if (elem.attachEvent) {
+		if (elem.addEventListener) {
+			elem.addEventListener(type, handler, false)
+		}
+		else if (elem.attachEvent) {
 			elem['e' + type + handler] = handler
 			elem[type + handler] = function () { elem['e' + type + handler](window.event) }
 			elem.attachEvent('on' + type, elem[type + handler])
-		} else if (elem.addEventListener)
-			elem.addEventListener(type, handler, false)
+		} 
 	}
 	Util.removeDOMEvent = function (elem, type, handler) {
-		if (elem.detachEvent) {
+		if (elem.removeEventListener) {
+			elem.removeEventListener(type, handler, false)
+		}
+		else if (elem.detachEvent) {
 			elem.detachEvent('on' + type, elem[type + handler])
 			elem['e' + type + handler] = null
 			elem[type + handler] = null
-		} else if (elem.removeEventListener)
-			elem.removeEventListener(type, handler, false)
+		}
 	}
 
 
@@ -2842,7 +2864,7 @@ IO:
 		var xhr = new Util.XHR;
 		url = Core.template(url)
 		try {
-			xhr.open('HEAD', Core.URL.randomize(url), false)
+			xhr.open(isWinRT ? 'GET' : 'HEAD', Core.URL.randomize(url), false)
 			xhr.send()
 			if (xhr.readyState != 4) return false;
 			switch (xhr.status) {
@@ -2862,7 +2884,7 @@ IO:
 			var xhr = new Util.XHR;
 			url = Core.template(url)
 			try {
-				xhr.open('HEAD', Core.URL.randomize(url), true)
+				xhr.open(isWinRT ? 'GET' : 'HEAD', Core.URL.randomize(url), true)
 				xhr.onreadystatechange = function () {
 					if (xhr.readyState != 4) return false;
 					//console.log(url, xhr.responseText, xhr.status)
@@ -3071,7 +3093,7 @@ IO:
 
 
 
-	// 'layout-update' defaults
+	// 'layout-update' event defaults
 	Core.listen('layout-update', function (detail) {
 		('width' in detail) || (detail.width = document.documentElement.offsetWidth);
 		('height' in detail) || (detail.height = document.documentElement.offsetHeight);

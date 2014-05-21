@@ -5,16 +5,7 @@
 
 
 (function() {
-	var undefined,
-		CorePublicOrigin = Core,
-		CorePrivateOrigin,
-		SandboxOrigin;
-
-	CorePublicOrigin.extend(function (Core, Sandbox) {
-		CorePrivateOrigin = Core
-		SandboxOrigin = Sandbox
-	})
-
+	var undefined;
 	//Mysterious `_$createEventManager` function, that was found in VS Reference sources. It does magic for function parameters reference.
 	var _eventManager = _$createEventManager(function () {
 		return {}
@@ -429,7 +420,7 @@
 	//define private `extend` method
 	CorePrivate.extend = CorePublic.extend
 
-	var Sandbox = function(moduleName) {
+	var SandboxConstructor = function(moduleName) {
 		/// <summary>Creates new sandbox instance, that may serve some module.</summary>
 		/// <param name="moduleName" type="String" optional="true">Context module name.</param>
 		/// <returns type="Object">Sandbox instance.</returns>
@@ -440,34 +431,34 @@
 		this.template = Templater(this)
 	}
 
-	Sandbox.prototype.hasFeature = function(featureName) {
+	SandboxConstructor.prototype.hasFeature = function(featureName) {
 		/// <summary>Checks if feature is supported by environment.</summary>
 		/// <param name="featureName" type="String">Feature property name.</param>
 		/// <returns type="Boolean">true or false.</returns>
 	}
 
-	Sandbox.prototype.load = function(url) {
+	SandboxConstructor.prototype.load = function(url) {
 		/// <summary>Alias to `Core.load(url, options)`, but with additional context templating rules for URLs.</summary>
 		/// <returns type="Promise">Result of resource load.</returns>
 	}
 
-	Sandbox.prototype.Promise = Promise
+	SandboxConstructor.prototype.Promise = Promise
 
-	Sandbox.prototype.listen = function(eventType, handler) {
+	SandboxConstructor.prototype.listen = function(eventType, handler) {
 		/// <summary>Attaches Core event listeners in runtime. This is an alternative way to add listener of Core events. These events are removed, when module will be destroyed, so they may be used in `init()`.</summary>
 		/// <param name="eventType" type="String">Event type.</param>
 		/// <param name="handler" type="Function">Callback handler.</param>
 		/// <returns type="Object">Sandbox instance.</returns>
 	}
 
-	Sandbox.prototype.action = function(actionType, detail) {
+	SandboxConstructor.prototype.action = function(actionType, detail) {
 		/// <summary>Generates action in Core with attached details.</summary>
 		/// <param name="actionType" type="String">Action type.</param>
 		/// <param name="detail" type="Object" optional="true">Details.</param>
 		/// <returns type="Object">Sandbox instance.</returns>
 	}
 
-	Sandbox.addTemplateRule = function(regexp, result) {
+	SandboxConstructor.addTemplateRule = function(regexp, result) {
 		///	<signature>
 		/// <summary>Ads new templating rule for sandbox.template() call.</summary>
 		/// <param name="regexp" type="RegExp">Regular expression</param>
@@ -482,13 +473,19 @@
 	
 	//refer comments to original object
 	intellisense.annotate(window, {
-		/// <var>Application Core global namespace.</var>
-		Core: {}
+		/// <field name='Core' type='Object'>Application Core global namespace.</field>
+		Core: CorePublic
 	})
-	intellisense.annotate(CorePublicOrigin, CorePublic)
-	intellisense.annotate(CorePrivateOrigin, CorePrivate)
-	intellisense.annotate(SandboxOrigin, Sandbox)
-	intellisense.annotate(SandboxOrigin.prototype, Sandbox.prototype)
+	//intellisense.annotate(Core, CorePublic)
+	Core.extend(function(Core, Sandbox) {
+		intellisense.annotate(Core, CorePrivate)
+		intellisense.annotate(Sandbox, SandboxConstructor)
+		intellisense.annotate(Sandbox.prototype, SandboxConstructor.prototype)
+	})
+
+
+	
+	
 	
 								/*Reference END*/
 
