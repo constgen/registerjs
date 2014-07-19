@@ -15,86 +15,102 @@
 
 							/*Reference START*/
 
-	var Templater = function(sandbox) {
-		return function(string) {
-			/// <summary>Processes {*}-like expressions in the string and replace them with data according to preset rules. If expression has no replacement rule, it stays as it is.</summary>
-			/// <param name="string" type="String">String to be parsed.</param>
-			/// <returns type="String">New string with processed variables.</returns>
-		}
-	}
+	
 
 	var Promise = function(initFunc, cancelFunc) {
 		/// <signature>
-		/// <summary>Promise constructor.</summary>
+		/// <summary>Polymorphic Promise constructor. If not used with `new` operator, returns instantly resolved promise object.</summary>
 		/// <param name="initFunc" type="Function" optional="true">Initialization function.</param>
 		/// <param name="cancelFunc" type="Function" optional="true">Cancellation function.</param>
 		/// <returns type="Promise">Promise object.</returns>
 		/// </signature>
-		/// <field name='every' static='true' type='Function'>Gathers many promises and becomes resolved, when they all resolved.</field>
-		/// <field name='any' static='true' type='Function'>Gathers many promises and becomes resolved, when they all fulfilled with any results.</field>
-		/// <field name='some' static='true' type='Function'>Gathers many promises and becomes resolved, when they all fulfilled with any results. But if all promises are rejected, also becomes rejected.</field>
-		return {
-			then: function(d, e, p) {
-				/// <signature>
-				/// <summary>Attaches callbacks.</summary>
-				/// <param name="successCallback" type="Function" optional="true">Will be called in case of successful fulfillment.</param>
-				/// <param name="errorCallback" type="Function" optional="true">Will be called in case of any error.</param>
-				/// <param name="progressCallback" type="Function" optional="true">Will be called on every step, wile Promise is not fulfilled.</param>
-				/// <returns type="Promise">The same Promise object.</returns>
-				/// </signature>
-				return this;
-			},
-			cancel: function () {
-				/// <summary>Rejects Promise, if have not fulfilled yet.</summary>
-				/// <returns type="Promise">The same Promise object.</returns>
-				return this;
-			},
-			wait: function(ms) {
-				/// <signature>
-				/// <summary>Wait before resolve the promise.</summary>
-				/// <param name="ms" type="Number" optional="true" integer="true">Delay.</param>
-				/// <returns type="Promise">The same Promise object.</returns>
-				/// </signature>
-				return this;
-			},
-			timeout: function(ms) {
-				/// <signature>
-				/// <summary>Wait before reject and cancel promise.</summary>
-				/// <param name="ms" type="Number" optional="true" integer="true">Delay.</param>
-				/// <returns type="Promise">The same Promise object.</returns>
-				/// </signature>
-				return this;
-			},
-			interval: function(ms) {
-				/// <signature>
-				/// <summary>Call progress with interval before promise is resolved or rejected.</summary>
-				/// <param name="ms" type="Number" optional="true" integer="true">Interval.</param>
-				/// <returns type="Promise">The same Promise object.</returns>
-				/// </signature>
-				return this;
-			},
-			delay: function(ms) {
-				/// <signature>
-				/// <summary>Create delay between callbacks and errorbacks, has no effect to progressback.</summary>
-				/// <param name="ms" type="Number" optional="true" integer="true">Delay.</param>
-				/// <returns type="Promise">The same Promise object.</returns>
-				/// </signature>
-				return this;
-			},
-			and: function(p) {
-				/// <signature>
-				/// <summary>Current promise can't be resolved until passed promise will resolve. If passed promise will fail, current promise also will fail with that error.</summary>
-				/// <param name="promise" type="Promise">Another Promise object.</param>
-				/// <returns type="Promise">The same Promise object.</returns>
-				/// </signature>
-				return this;
-			}
+		if (this === window || this === undefined || (this && this.Promise)) {
+			return new Promise(initFunc, cancelFunc)
 		}
+		return this;
 	}
-	Promise.every =
-	Promise.any =
+	Promise.prototype.then = function(successCallback, errorCallbacke, progressCallback) {
+		/// <signature>
+		/// <summary>Attaches callbacks.</summary>
+		/// <param name="successCallback" type="Function" optional="true">Will be called in case of successful fulfillment.</param>
+		/// <param name="errorCallback" type="Function" optional="true">Will be called in case of any error.</param>
+		/// <param name="progressCallback" type="Function" optional="true">Will be called on every step, wile Promise is not fulfilled.</param>
+		/// <returns type="Promise">A new Promise object.</returns>
+		/// </signature>
+		return new Promise;
+	}
+	Promise.prototype.catch = function(errorCallback) {
+		/// <signature>
+		/// <summary>Attaches error callback.</summary>
+		/// <param name="errorCallback" type="Function" optional="true">Will be called in case of any error.</param>
+		/// <returns type="Promise">A new Promise object.</returns>
+		/// </signature>
+		return new Promise;
+	}
+	Promise.prototype.cancel = function () {
+		/// <summary>Rejects Promise, if have not fulfilled yet.</summary>
+		/// <returns type="Promise">The same Promise object.</returns>
+		return this;
+	}
+	Promise.prototype.wait = function(ms) {
+		/// <signature>
+		/// <summary>Wait before resolve the promise.</summary>
+		/// <param name="ms" type="Number" optional="true" integer="true">Delay.</param>
+		/// <returns type="Promise">The same Promise object.</returns>
+		/// </signature>
+		return this;
+	}
+	Promise.prototype.timeout = function(ms) {
+		/// <signature>
+		/// <summary>Wait before reject and cancel promise.</summary>
+		/// <param name="ms" type="Number" optional="true" integer="true">Delay.</param>
+		/// <returns type="Promise">The same Promise object.</returns>
+		/// </signature>
+		return this;
+	}
+	Promise.prototype.interval = function(ms) {
+		/// <signature>
+		/// <summary>Call progress with interval before promise is resolved or rejected.</summary>
+		/// <param name="ms" type="Number" optional="true" integer="true">Interval.</param>
+		/// <returns type="Promise">The same Promise object.</returns>
+		/// </signature>
+		return this;
+	}
+	Promise.prototype.delay = function(ms) {
+		/// <signature>
+		/// <summary>Create delay between callbacks and errorbacks, has no effect to progressback.</summary>
+		/// <param name="ms" type="Number" optional="true" integer="true">Delay.</param>
+		/// <returns type="Promise">A new Promise object.</returns>
+		/// </signature>
+		return new Promise;
+	}
+	Promise.prototype.and = function(p) {
+		/// <signature>
+		/// <summary>Current promise can't be resolved until passed promise will resolve. If passed promise will fail, current promise also will fail with that error.</summary>
+		/// <param name="promise" type="Promise">Another Promise object.</param>
+		/// <returns type="Promise">A new Promise object.</returns>
+		/// </signature>
+		return new Promise;
+	}
+
+	Promise.all =
+	Promise.every = function(/*args*/) {
+		/// <signature>
+		/// <summary>Gathers many promises and becomes resolved, when they all resolved.</summary>
+		/// <param parameterArray="true" name="Promises" type="Array">Array of any values or Promises.</param>
+		/// <returns type="Promise">Promise object.</returns>
+		/// </signature>
+	}
+	Promise.any = function(/*args*/) {
+		/// <signature>
+		/// <summary>Gathers many promises and becomes resolved, when they all fulfilled with any results.</summary>
+		/// <param parameterArray="true" name="Promises" type="Array">Array of any values or Promises.</param>
+		/// <returns type="Promise">Promise object.</returns>
+		/// </signature>
+	}
 	Promise.some = function(/*args*/) {
 		/// <signature>
+		/// <summary>Gathers many promises and becomes resolved, when they all fulfilled with any results. But if all promises are rejected, also becomes rejected.</summary>
 		/// <param parameterArray="true" name="Promises" type="Array">Array of any values or Promises.</param>
 		/// <returns type="Promise">Promise object.</returns>
 		/// </signature>
@@ -104,6 +120,92 @@
 		/// <param name="value">Any value.</param>
 		/// <returns type="Boolean">true or false.</returns>
 	}
+	
+	var LoadPromise = function(initFunc, cancelFunc) {
+		if (this instanceof Promise) { //with `new` operator
+			Promise.call(this, initFunc, cancelFunc)
+		}
+		else { //as a function
+			return new LoadPromise(function(resolve) {
+				resolve(initFunc)
+			})
+		}
+	}
+	LoadPromise.prototype = Object.create(Promise.prototype)
+	LoadPromise.prototype.constructor = LoadPromise
+	LoadPromise.prototype.then = function(successCallback, errorCallbacke, progressCallback) {
+		/// <signature>
+		/// <summary>Attaches callbacks.</summary>
+		/// <param name="successCallback" type="Function" optional="true">Will be called in case of successful fulfillment.</param>
+		/// <param name="errorCallback" type="Function" optional="true">Will be called in case of any error.</param>
+		/// <param name="progressCallback" type="Function" optional="true">Will be called on every step, wile Promise is not fulfilled.</param>
+		/// <returns type="LoadPromise">A new Promise object.</returns>
+		/// </signature>
+		return new LoadPromise(
+			Promise.prototype.then.call(this, successCallback, errorCallbacke, progressCallback)
+		)
+	}
+	LoadPromise.prototype.load = function(src, options) {
+		return this.then(function() {
+			return CorePrivate.load(src, options)
+		})
+	}
+
+	var Templater = function(sandbox) {
+		return function(string) {
+			/// <summary>Processes {*}-like expressions in the string and replace them with data according to preset rules. If expression has no replacement rule, it stays as it is.</summary>
+			/// <param name="string" type="String">String to be parsed.</param>
+			/// <returns type="String">New string with processed variables.</returns>
+		}
+	}
+
+	var SandboxConstructor = function(moduleName) {
+		/// <summary>Creates new sandbox instance, that may serve some module.</summary>
+		/// <param name="moduleName" type="String" optional="true">Context module name.</param>
+		/// <returns type="Object">Sandbox instance.</returns>
+		/// <field name='moduleName' type='String'>Sandbox context module name.</field>
+		/// <field name='moduleUrl' type='String'>Sandbox context module URL.</field>
+		/// <field name='Promise' static='true' type='Function'>Alias to `Core.Promise`.</field>
+		/// <field name='template' type='Function'>String variables processing in context of sandbox.</field>
+		this.template = Templater(this)
+	}
+	SandboxConstructor.prototype.hasFeature = function(featureName) {
+		/// <summary>Checks if feature is supported by environment.</summary>
+		/// <param name="featureName" type="String">Feature property name.</param>
+		/// <returns type="Boolean">true or false.</returns>
+	}
+	SandboxConstructor.prototype.load = function(url) {
+		/// <summary>Alias to `Core.load(url, options)`, but with additional context templating rules for URLs.</summary>
+		/// <returns type="LoadPromise">Result of resource load.</returns>
+		return Core.load(url);
+	}
+	SandboxConstructor.prototype.Promise = Promise
+	SandboxConstructor.prototype.listen = function(eventType, handler) {
+		/// <summary>Attaches Core event listeners in runtime. This is an alternative way to add listener of Core events. These events are removed, when module will be destroyed, so they may be used in `init()`.</summary>
+		/// <param name="eventType" type="String">Event type.</param>
+		/// <param name="handler" type="Function">Callback handler.</param>
+		/// <returns type="Object">Sandbox instance.</returns>
+	}
+	SandboxConstructor.prototype.action = function(actionType, detail) {
+		/// <summary>Generates action in Core with attached details.</summary>
+		/// <param name="actionType" type="String">Action type.</param>
+		/// <param name="detail" type="Object" optional="true">Details.</param>
+		/// <returns type="Object">Sandbox instance.</returns>
+	}
+
+	SandboxConstructor.addTemplateRule = function(regexp, result) {
+		///	<signature>
+		/// <summary>Ads new templating rule for sandbox.template() call.</summary>
+		/// <param name="regexp" type="RegExp">Regular expression</param>
+		/// <param name="result" type="Function" value="function(context){return ''})">Function that returns string for replacement.</param>
+		/// </signature>
+		///	<signature>
+		/// <summary>Ads new templating rule for sandbox.template() call.</summary>
+		/// <param name="regexp" type="RegExp">Regular expression.</param>
+		/// <param name="result" type="String">String for replacement.</param>
+		/// </signature>
+	}
+
 
 	var CorePrivate = {
 		template: Templater(),
@@ -125,20 +227,21 @@
 			/// <summary>1. Loads any resource that you can imagine by URL.</summary>
 			/// <param name="src" type="String">Path to resource to be loaded.</param>
 			/// <param name="options" type="Object" optional="true" value="{defer: false, async: false, reload: false, cache: undefined}">Options.</param>
-			/// <returns type="Promise">Result of resource load.</returns>
+			/// <returns type="LoadPromise">Result of resource load.</returns>
 			/// </signature>
 			/// <signature>
 			/// <summary>2. Loads any resources that you can imagine by URLs.</summary>
 			/// <param name="Srcs" type="Array" elementType="String">Array of paths to resources to be loaded.</param>
 			/// <param name="options" type="Object" optional="true" value="{defer: false, async: false, reload: false, cache: undefined}">Options.</param>
-			/// <returns type="Promise">Result of all resources load.</returns>
+			/// <returns type="LoadPromise">Result of all resources load.</returns>
 			/// </signature>
 			/// <signature>
 			/// <summary>3. Ensures that DOM element is loaded</summary>
 			/// <param name="element" type="HTMLElement" elementMayBeNull="true">HTML element with `src` or `href` property</param>
 			/// <param name=''/>
-			/// <returns type="Promise">Result of resource load.</returns>
+			/// <returns type="LoadPromise">Result of resource load.</returns>
 			/// </signature>
+			return new LoadPromise();
 		},
 		/// <field type='Promise'>Promise of document 'DOMContentLoaded'.</field>
 		DOMReady: new Promise,
@@ -346,6 +449,7 @@
 			/// <summary>Includes files in document, if they are available: index.html, style.css, ie.css, register.js.</summary>
 			/// <param name="path" type="String">Path to component directory in which files are located.</param>
 			/// <returns type="Promise">Results of resources load.</returns>
+			return Promise.some();
 		},
 		register: function(moduleName, moduleBody) {
 			/// <signature>
@@ -366,6 +470,7 @@
 			/// <param name="otherModuleName" type="String" optional="true">Other module name to be initialized.</param>
 			/// <returns type="Promise">Result of module(s) initialization.</returns>
 			/// </signature>
+			return Promise.some();
 		},
 		stop: function(moduleName/*,args*/) {
 			/// <signature>
@@ -374,33 +479,18 @@
 			/// <param name="otherModuleName" type="String" optional="true">Other module name to be destroyed.</param>
 			/// <returns type="Promise">Result of module(s) distruction.</returns>
 			/// </signature>
+			return Promise.some();
 		},
 		startAll: function() {
 			/// <summary>Initializes all registered modules.</summary>
 			/// <returns type="Promise">Result of modules initializations.</returns>
+			return Promise.any();
 		},
 		stopAll: function() {
 			/// <summary>Destroys all initialized modules</summary>
 			/// <returns type="Promise">Result of modules distructions.</returns>
+			return Promise.any();
 		},
-		extend: undefined //will be defined later
-	}
-
-	var CorePublic = {
-		load: CorePrivate.load,
-		/// <field type='Promise'>Promise of document 'DOMContentLoaded'.</field>
-		DOMReady: CorePrivate.DOMReady,
-		/// <field type='Promise'>Promise of window 'load'.</field>
-		DOMLoaded: CorePrivate.DOMLoaded,
-		/// <field type='Promise'>Promise of included and loaded UI modules.</field>
-		UIReady: CorePrivate.UIReady,
-		configure: CorePrivate.configure,
-		include: CorePrivate.include,
-		register: CorePrivate.register,
-		start: CorePrivate.start,
-		stop: CorePrivate.stop,
-		startAll: CorePrivate.startAll,
-		stopAll: CorePrivate.stopAll,
 		extend: function(extendFunc) {
 			/// <signature>
 			/// <summary>Extends Core object with new properties and methods.</summary>
@@ -417,70 +507,48 @@
 		}
 	}
 
-	//define private `extend` method
-	CorePrivate.extend = CorePublic.extend
-
-	var SandboxConstructor = function(moduleName) {
-		/// <summary>Creates new sandbox instance, that may serve some module.</summary>
-		/// <param name="moduleName" type="String" optional="true">Context module name.</param>
-		/// <returns type="Object">Sandbox instance.</returns>
-		/// <field name='moduleName' type='String'>Sandbox context module name.</field>
-		/// <field name='moduleUrl' type='String'>Sandbox context module URL.</field>
-		/// <field name='Promise' static='true' type='Function'>Alias to `Core.Promise`.</field>
-		/// <field name='template' type='Function'>String variables processing in context of sandbox.</field>
-		this.template = Templater(this)
-	}
-
-	SandboxConstructor.prototype.hasFeature = function(featureName) {
-		/// <summary>Checks if feature is supported by environment.</summary>
-		/// <param name="featureName" type="String">Feature property name.</param>
-		/// <returns type="Boolean">true or false.</returns>
-	}
-
-	SandboxConstructor.prototype.load = function(url) {
-		/// <summary>Alias to `Core.load(url, options)`, but with additional context templating rules for URLs.</summary>
-		/// <returns type="Promise">Result of resource load.</returns>
-	}
-
-	SandboxConstructor.prototype.Promise = Promise
-
-	SandboxConstructor.prototype.listen = function(eventType, handler) {
-		/// <summary>Attaches Core event listeners in runtime. This is an alternative way to add listener of Core events. These events are removed, when module will be destroyed, so they may be used in `init()`.</summary>
-		/// <param name="eventType" type="String">Event type.</param>
-		/// <param name="handler" type="Function">Callback handler.</param>
-		/// <returns type="Object">Sandbox instance.</returns>
-	}
-
-	SandboxConstructor.prototype.action = function(actionType, detail) {
-		/// <summary>Generates action in Core with attached details.</summary>
-		/// <param name="actionType" type="String">Action type.</param>
-		/// <param name="detail" type="Object" optional="true">Details.</param>
-		/// <returns type="Object">Sandbox instance.</returns>
-	}
-
-	SandboxConstructor.addTemplateRule = function(regexp, result) {
-		///	<signature>
-		/// <summary>Ads new templating rule for sandbox.template() call.</summary>
-		/// <param name="regexp" type="RegExp">Regular expression</param>
-		/// <param name="result" type="Function" value="function(context){return ''})">Function that returns string for replacement.</param>
-		/// </signature>
-		///	<signature>
-		/// <summary>Ads new templating rule for sandbox.template() call.</summary>
-		/// <param name="regexp" type="RegExp">Regular expression.</param>
-		/// <param name="result" type="String">String for replacement.</param>
-		/// </signature>
-	}
+	
 	
 	//refer comments to original object
-	intellisense.annotate(window, {
-		/// <field name='Core' type='Object'>Application Core global namespace.</field>
-		Core: CorePublic
+	//intellisense.annotate(window, {
+	//	/// <field name='Core' type='Object'>Application Core global namespace.</field>
+	//	Core: Core
+	//})
+	intellisense.annotate(Core, {
+		load: CorePrivate.load,
+		/// <field type='Promise'>Promise of document 'DOMContentLoaded'.</field>
+		DOMReady: CorePrivate.DOMReady,
+		/// <field type='Promise'>Promise of window 'load'.</field>
+		DOMLoaded: CorePrivate.DOMLoaded,
+		/// <field type='Promise'>Promise of included and loaded UI modules.</field>
+		UIReady: CorePrivate.UIReady,
+		configure: CorePrivate.configure,
+		include: CorePrivate.include,
+		register: CorePrivate.register,
+		start: CorePrivate.start,
+		stop: CorePrivate.stop,
+		startAll: CorePrivate.startAll,
+		stopAll: CorePrivate.stopAll,
+		extend: CorePrivate.extend
 	})
-	//intellisense.annotate(Core, CorePublic)
+
 	Core.extend(function(Core, Sandbox) {
 		intellisense.annotate(Core, CorePrivate)
+		
+		intellisense.annotate(Core.Promise, Promise)
+		intellisense.annotate(Core.Promise.all, Promise.all)
+		intellisense.annotate(Core.Promise.any, Promise.any)
+		intellisense.annotate(Core.Promise.some, Promise.some)
+		intellisense.annotate(Core.Promise.isPromise, Promise.isPromise)
+		intellisense.annotate(Core.Promise.prototype, Promise.prototype)
+		
+		intellisense.annotate(Core.Util, CorePrivate.Util)
+		intellisense.annotate(Core.URL, CorePrivate.URL)
+		intellisense.annotate(Core.config, CorePrivate.config)
+		intellisense.annotate(Core.Features, CorePrivate.Features)
+		
 		intellisense.annotate(Sandbox, SandboxConstructor)
-		intellisense.annotate(Sandbox.prototype, SandboxConstructor.prototype)
+		intellisense.annotate(Sandbox.prototype, SandboxConstructor.prototype)	
 	})
 
 
@@ -524,7 +592,7 @@
 
 	intellisense.addEventListener('statementcompletion', function(e) {
 		//filter unnecessary properties in `Core` object
-		if (/^core$/i.test(e.targetName)) {
+		if (/^(Core|Features|config)$/.test(e.targetName)) {
 			e.items = e.items.filter(function(item) {
 				return !(item.value && item.value.toString && /\[native\scode\]/.test(item.value.toString()));
 			})

@@ -1,5 +1,5 @@
 ﻿/*
-Version 3.4.4
+Version 3.5.1
 Compatible with: NodeJS, AMD, WinRT.
 
 IO:
@@ -20,7 +20,7 @@ IO:
 		location = window.location,
 
 		/*internal*/
-		Core = { version: '3.4.4' }, // Application Core
+		Core = { version: '3.5.1' }, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
@@ -144,7 +144,7 @@ IO:
 					originHandler = global.onmessage;
 
 				global.onmessage = function () { isAsync = false }
-				global.postMessage('', '*')
+				global.postMessage('{}', '*')
 				global.onmessage = originHandler
 
 				return isAsync;
@@ -420,7 +420,7 @@ IO:
 
 
 
-								/* Promise 2.1 */
+								/* Promise 3.1 */
 
 	var Promise = Core.Promise = (function (global) {
 		var Deferred,
@@ -432,243 +432,153 @@ IO:
 			},
 			isError = function (value) {
 				return (value instanceof Error) || (value && value.name && /Error$/.test(value.name))
+			},
+			isPromise = function (value) {
+				return value && (typeof value === 'object' || typeof value === 'function') && typeof value.then === 'function';
+			},
+			getDeferFromPromise = function (promise) {
+				return promise.__defer__
+			},
+			setDeferToPromise = function (promise, defer) {
+				defer.promise = promise
+				return promise.__defer__ = defer
 			};
 
 		Deferred = function (canceler) {
 			this.canceler = canceler
 			this.isResolved = false
 			this.isRejected = false
-			this.result = []//arguments array
+			this.isHandled = false
+			this.value = []//arguments array
 			this.Callbacks = []
-			this.newPromise =
+			this.Childrens = []
 			//Deferred may serve Promise or not
 			this.promise = undefined
 		}
 
-
-		Deferred.prototype.updateResult = function (newResult) {
-			if (newResult !== undefined)
-				this.result = [newResult]
-		}
-
-		Deferred.prototype.call = function (handler) {
+		Deferred.prototype.handle = function (handler) {
 			var func = this.isResolved ? handler.done : handler.canceled,
-				defer = this,
-				newResult;
+				stateAction = this.isResolved ? 'resolve' : 'reject',
+				deferred = handler.childDeferred,
+				result;
 
 			if (func) {
-				try {
-					//console.warn(defer.result)
-					newResult = func.apply(defer.promise || defer, defer.result); //new or old value
-					if (newResult && typeof newResult.then === "function" && newResult !== (defer.promise || defer)) {
-						//if callback returns Promise, than create chain
-						this.newPromise = newResult //save a link to the new Promise object
-						while (handler = this.Callbacks.shift()) { //migrate handlers to new promise
-							newResult.then(handler.done, handler.canceled, handler.progress)
+				this.isHandled = true
+				//setAsyncTask(function(){
+					try {
+						result = func.apply(undefined, this.value)
+						//if callback returns the same Promise object, then create error
+						if (result === this.promise) {
+							deferred.reject(new TypeError())
 						}
-						//check if return value have changed
-						newResult.then(defer.updateResult, defer.updateResult, defer.updateResult)
-						return
-					}
-					else if (isError(newResult)) { //if callback returns error, than change state to rejected
-						defer.updateResult(newResult)
-						if (defer.isResolved) {
-							defer.isResolved = false
-							defer.reject(newResult)
+							//if callback returns Promise-like object, then create chain
+						else if (isPromise(result)) {
+							deferred.canceler = function () {
+								result.cancel && result.cancel()
+							}
+							result.then(deferred.resolve.bind(deferred), deferred.reject.bind(deferred), deferred.progress.bind(deferred))
+						}
+							//if callback returns error object, then reject child promise
+						else if (isError(result)) {
+							deferred.reject(result)
+						}
+						else if (result) {
+							deferred[stateAction](result)
+						} else {
+							deferred[stateAction].apply(deferred, this.value)
 						}
 					}
-					else {//if callback returns value, than save it as Promise value
-						defer.updateResult(newResult)
+					catch (err) {
+						//console.error(err)
+						result = err
+						deferred.reject(result)
 					}
-				}
-				catch (err) {
-					var trowError = !defer.Callbacks.filter(function (handler) {
-						return handler.canceled && handler.canceled !== defer.updateResult
-					}).length;
-
-					defer.updateResult(err)
-					//if exeption is in doneCallback, switch to rejected state from this moment
-					if (defer.isResolved) {
-						defer.isResolved = false
-						defer.reject(err)
-					}
-					//throw error if it was not handled in current event loop
-					if (trowError) {
-						throw err
-					}
-				}
+				//}.bind(this))
 			} else {
-				//if Deferred rejected and there is no errorback, throw Error
-				//if (isRejected) throw result[0]
+				deferred[stateAction].apply(deferred, this.value)
+			}
+
+			return result;
+		}
+
+		//used for both `resolve` and reject, because they are similar
+		var deferredTransition = function (state) {
+			return function (val/*, args*/) {
+				//if resolved with the same Promise object
+				if (val === this.promise) {
+					return this.reject(new TypeError());
+				}
+				//if resolved with any other Promise object
+				else if (isPromise(val)) {
+					val.then(this.resolve.bind(this), this.reject.bind(this), this.progress.bind(this))
+					return this;
+				}
+				//prevent second resolve
+				if (this.isResolved || this.isRejected) {
+					return this;
+				}
+				var handler;
+				this.value = arguments //save value
+
+				//state dependent behavior
+				if (state === 'resolve') { this.isResolved = true }
+				else if (state === 'reject') { this.isRejected = true }
+
+				while (handler = this.Callbacks.shift()) {
+					this.handle(handler)
+				}
+				return this;
 			}
 		}
 
-		Deferred.prototype.resolve = function (/*args*/) {
-			//prevent second resolve
-			if (this.isResolved || this.isRejected) {
-				return this
-			}
-			var handler;
-			this.result = arguments //save value
-			this.isResolved = true
+		Deferred.prototype.resolve = deferredTransition('resolve')
 
-			while (handler = this.Callbacks.shift()) {
-				this.call(handler)
-			}
-			//console.info(this.result)
-			//clear
-			handler = null
-			this.Callbacks = []
-			return this
-		}
-
-		Deferred.prototype.reject = function (/*args*/) {
-			//prevent second reject
-			if (this.isResolved || this.isRejected) {
-				return this
-			}
-			var handler;
-			this.result = arguments //save value
-			this.isResolved = false
-			this.isRejected = true
-			while (handler = this.Callbacks.shift()) {
-				this.call(handler)
-			}
-			//clear
-			handler = null
-			this.Callbacks = []
-			return this
-		}
+		Deferred.prototype.reject = deferredTransition('reject')
 
 		Deferred.prototype.progress = function (/*args*/) {
-			if (this.isResolved || this.isRejected) return this;
-			var handler, i = 0, ret;
-			this.result = arguments //save value
-			try {
-				while (handler = this.Callbacks[i++]) {
-					handler.progress && (ret = handler.progress.apply(this.promise, this.result))
+			if (this.isResolved || this.isRejected) {
+				return this;
+			}
+			var handler,
+				i = 0,
+				result,
+				deferred;
+			this.value = arguments //save value
+			while (handler = this.Callbacks[i++]) {
+				try {
+					deferred = handler.childDeferred
+					handler.progress && (result = handler.progress.apply(undefined, this.value))
 					//progress handler can't return promise
-					if (!(ret && typeof ret.then === 'function'))
-						this.updateResult(ret)
-				}
-			} catch (err) {
-				throw err
-			}
-			return this
-		}
-
-		Deferred.prototype.then = function (doneCallback, canceledCallback, progressCallback) {
-			var handler = {
-				done: isFunc(doneCallback) ? doneCallback : undefined,
-				canceled: isFunc(canceledCallback) ? canceledCallback : undefined,
-				progress: isFunc(progressCallback) ? progressCallback : undefined
-			}
-			//if new Promise appeared in chain, attach callbacks to new Promise
-			if (this.newPromise) {
-				this.newPromise.then(doneCallback, canceledCallback, progressCallback)
-			}
-				//if Deferred is resolved or rejected, execute doneCallback immediately
-			else if (this.isResolved || this.isRejected)
-				this.call(handler)
-			else {
-				this.Callbacks.push(handler)
-			}
-			return this
-		}
-
-		Deferred.prototype.cancel = function () {
-			isFunc(this.canceler) && this.canceler()
-			if (this.newPromise) {
-				this.newPromise.cancel()
-			}
-			else {
-				this.reject(new Error('Canceled'))
-			}
-			return this
-		}
-
-		/*Helpers*/
-		//wait before resolve promise
-		Deferred.prototype.wait = function (ms) {
-			var id,
-				timer = (ms) ? setTimeout : setAsyncTask;
-			id = timer(this.resolve.bind(this), ms)
-			return this.then(
-				function () {//done
-					ms ? clearTimeout(id) : clearAsyncTask(id)
-				},
-				function () {//canceled
-					ms ? clearTimeout(id) : clearAsyncTask(id)
-				}
-			)
-		}
-		//wait before reject and cancel promise
-		Deferred.prototype.timeout = function (ms) {
-			var id, defer = this,
-				timer = ms ? setTimeout : setAsyncTask;
-			id = timer(function () {
-				defer.reject(new Error('Timedout'))
-				//and do cancelatin
-				defer.cancel()
-			}, ms)
-
-			return this.then(
-				function () {//done
-					ms ? clearTimeout(id) : clearAsyncTask(id)
-				},
-				function () {//canceled
-					ms ? clearTimeout(id) : clearAsyncTask(id)
-				}
-			)
-		}
-		//call progress with interval before promise is resolved or rejected
-		Deferred.prototype.interval = function (ms) {
-			var id,
-				timer = ms ? setTimeout : setAsyncTask;
-			id = timer(this.progress.bind(this), ms)
-			return this.then(
-				function () {//done
-					ms ? clearTimeout(id) : clearAsyncTask(id)
-				},
-				function () {//canceled
-					ms ? clearTimeout(id) : clearAsyncTask(id)
-				}
-			)
-		}
-		//create delay between callbacks and errorbacks, has no effect to progressback
-		Deferred.prototype.delay = function (ms) {
-			if (ms) {
-				var delayPromise = new Deferred(), defer = this;
-				this.then(
-					function () {//done
-						return delayPromise.wait(ms).then(function () { return defer.result[0] })
-					},
-					function () {//canceled
-						return delayPromise.timeout(ms).then(null, function () { return defer.result[0] })
+					if (result !== undefined && !isPromise(result)) {
+						deferred.progress(result)
 					}
-				)
+					else {
+						deferred.progress.apply(deferred, this.value)
+					}
+				} catch (err) {
+					//console.error(err)
+					deferred.reject(err)
+				}
 			}
 			return this;
-		}
-		//Current promise can't be resolved until passed promise will resolve. If passed promise will fail, current promise also will fail with that error
-		Deferred.prototype.and = function (anotherPromise) {
-			return this.then(function (val) {//done
-				return Promise(anotherPromise).then(
-					function () { return val }, //success
-					function (err) { return err }) //switch to error state with this error
-			})
 		}
 
 		// Polymorph Promise constructor.
 		// Promise constructor has to be used with `new` operator, 
 		// else returns istant resolved promise object.
-		Promise = function (initFunc, cancelFunc) {
-			var defer;//Deferred, that will serve this Promise
+		Promise = function (initFunc, cancelFunc, optionalValue) {
+			var defer, //Deferred, that will serve this Promise
+				promise,
+				args = arguments;
 
-			//if called as a constructor
-			if (this instanceof Promise) {
-				defer = new Deferred(cancelFunc)
-				defer.promise = this
+			//if was called as a constructor or by `Promise.call()`
+			if (
+				(this instanceof Promise)
+				|| (this !== window && this !== undefined) //to be possible to inherit
+			) {
+				promise = this
+				//link promise with defer
+				defer = setDeferToPromise(promise, new Deferred(cancelFunc))
 
 				if (isFunc(initFunc)) {
 					// create promise
@@ -676,48 +586,156 @@ IO:
 				}
 				else {
 					// if `initFunc` is not a function, create passive promise with preseted result
-					defer.then(function () { return initFunc })
+					defer.value = args
 				}
-
-				defer.promise.then = function (d, e, p) { defer.then(d, e, p); return this }
-				defer.promise.cancel = function () { defer.cancel(); return this }
-				defer.promise.wait = function (ms) { defer.wait(ms); return this }
-				defer.promise.timeout = function (ms) { defer.timeout(ms); return this }
-				defer.promise.interval = function (ms) { defer.interval(ms); return this }
-				defer.promise.delay = function (ms) { defer.delay(ms); return this }
-				//`.and` is in prototype
 			}
-				//if called as a function
+			//if called as a function
 			else {
-				defer = new Deferred()
-				defer.promise = new Promise(function (d, e, p) { defer.then(d, e, p) })
 				if (initFunc instanceof Promise) {
 					//return passed promise as it is
 					return initFunc;
 				}
-				else if (Promise.isPromise(initFunc)) {
+				else if (isPromise(initFunc)) {
 					//redefine promise if another promise was passed as first argument
-					initFunc.then(defer.resolve.bind(defer), defer.reject.bind(defer), defer.progress.bind(defer))
+					promise = new Promise(
+						function(d, e, p) { initFunc.then(d, e, p) },
+						initFunc.cancel ? function() { initFunc.cancel() } : undefined
+					)
 				}
 				else if (isFunc(initFunc)) {
 					//make promise resolved with function returned value
-					defer.resolve(initFunc())
+					promise = new Promise(function (d) { d(initFunc()) })
 				}
 				else if (isError(initFunc)) {
 					//make promise rejected with passed error
-					defer.reject(initFunc)
+					promise = new Promise(function (d, e) { e(initFunc) })
 				}
 				else {
 					//make promise resolved with passed value
-					defer.resolve(initFunc)
+					promise = new Promise(function(d) {
+						//some speed optimization
+						if (args.length > 3) {
+							d.apply(undefined, args)
+						} else {
+							d.call(undefined, initFunc, cancelFunc, optionalValue)
+						}
+					})
 				}
 			}
 
-			return defer.promise;
+			return promise;
 		}
 
-		//inheritance
-		Promise.prototype.and = Deferred.prototype.and
+		Promise.prototype.then = function (doneCallback, canceledCallback, progressCallback) {
+			var defer = getDeferFromPromise(this),
+				newPromise = new Promise(),
+				handler = {
+					done: isFunc(doneCallback) ? doneCallback : undefined,
+					canceled: isFunc(canceledCallback) ? canceledCallback : undefined,
+					progress: isFunc(progressCallback) ? progressCallback : undefined,
+					childDeferred: getDeferFromPromise(newPromise)
+				};
+
+			//if Deferred is resolved or rejected, execute doneCallback immediately
+			if (defer.isResolved || defer.isRejected) {
+				defer.handle(handler);
+			}
+			else {
+				defer.Callbacks.push(handler)
+			}
+			return newPromise;
+		}
+
+		Promise.prototype.cancel = function () {
+			var defer = getDeferFromPromise(this);
+			if (isFunc(defer.canceler)) {
+				defer.canceler.call()
+			}
+			defer.reject(new Error('Canceled'))
+			return this;
+		}
+
+		Promise.prototype['catch'] = function (onFailed) {
+			return this.then(undefined, onFailed);
+		}
+
+		/*Helpers*/
+
+		//wait before resolve promise
+		Promise.prototype.wait = function (ms) {
+			var defer = getDeferFromPromise(this),
+				timer = (ms) ? setTimeout : setAsyncTask,
+				id = timer(function() {
+					defer.resolve.apply(defer, defer.value)
+				}, ms);
+			this.then(
+				function () { ms ? clearTimeout(id) : clearAsyncTask(id) },
+				function () { ms ? clearTimeout(id) : clearAsyncTask(id) }
+			)
+			return this;
+		}
+		//wait before reject and cancel promise
+		Promise.prototype.timeout = function (ms) {
+			var id,
+				defer = getDeferFromPromise(this),
+				timer = ms ? setTimeout : setAsyncTask;
+			id = timer(function () {
+				defer.reject(new Error('Timedout'))
+				//and do cancelatin
+				this.cancel()
+			}.bind(this), ms)
+			this.then(
+				function () { ms ? clearTimeout(id) : clearAsyncTask(id) },
+				function () { ms ? clearTimeout(id) : clearAsyncTask(id) }
+			)
+			return this;
+		}
+		//Current promise can't be resolved until passed promise will resolve. If passed promise will fail, current promise also will fail with that error
+		Promise.prototype.and = function (anotherPromise) {
+			//promisify value
+			anotherPromise = Promise(anotherPromise)
+			var currentPromise = this;
+			return new Promise(function (d, e, p) {
+				currentPromise.then(function (val) {//done
+					anotherPromise.then(
+						function () { d(val) }, //success
+						e //switch to error state with this error
+					)
+				}, e, p)
+			}, function () {
+				currentPromise.cancel()
+			});
+		}
+		//create delay between callbacks and errorbacks, has no effect to progressback
+		Promise.prototype.delay = function(ms) {
+			var timer = (ms) ? setTimeout : setAsyncTask;
+			return this.then(
+				function() {//done
+					var values = arguments;
+					return new Promise(function(d) {
+						timer(function() { d.apply(undefined, values) }, ms)
+					})
+				},
+				function() {//canceled
+					var values = arguments;
+					return new Promise(function(d, e) {
+						timer(function() { e.apply(undefined, values) }, ms)
+					})
+				}
+			);
+		}
+		//call progress with interval before promise is resolved or rejected
+		Promise.prototype.interval = function(ms) {
+			var defer = getDeferFromPromise(this),
+				id = setInterval(defer.progress.bind(defer), ms);
+			this.then(
+				clearInterval.bind(undefined, id),//done
+				clearInterval.bind(undefined, id)//canceled
+			)
+			return this;
+		}
+
+		/*Collections*/
 
 		PromiseCollection = function (specificFunc) {
 			return function () {
@@ -747,9 +765,9 @@ IO:
 						p = Promise(p)
 						setAsyncTask(function () {
 							p.then(
-								itemCallbacks.itemResolved.bind(p, i),
-								itemCallbacks.itemRejected.bind(p, i),
-								itemCallbacks.itemProgress.bind(p, i)
+								itemCallbacks.itemResolved && itemCallbacks.itemResolved.bind(undefined, i),
+								itemCallbacks.itemRejected && itemCallbacks.itemRejected.bind(undefined, i),
+								itemCallbacks.itemProgressed && itemCallbacks.itemProgressed.bind(undefined, i)
 							)
 						})
 					})
@@ -763,9 +781,8 @@ IO:
 				})
 			}
 		}
-
-		//`every` method, gathers many promises and becomes resolved, when they all resolved
-		Promise.every = PromiseCollection(function (props, resolveCollection, rejectCollection, progressCollection) {
+		//`all` method, gathers many promises and becomes resolved, when they all resolved
+		Promise.all = Promise.every = PromiseCollection(function (props, resolveCollection, rejectCollection, progressCollection) {
 			//if no arguments, resolve collection
 			if (!props.length) {
 				resolveCollection([])
@@ -783,10 +800,9 @@ IO:
 				itemRejected: function (i, err) {
 					rejectCollection(err)
 				},
-				itemProgress: noop
+				itemProgressed: undefined
 			}
 		})
-
 		//`any` method, gathers many promises and becomes resolved, when they all fullfilled with any results.
 		Promise.any = PromiseCollection(function (props, resolveCollection, rejectCollection, progressCollection) {
 			//if no arguments, resolve collection
@@ -811,7 +827,7 @@ IO:
 						resolveCollection(props.Results)
 					}
 				},
-				itemProgress: noop
+				itemProgressed: undefined
 			}
 		})
 		//`some` method, gathers many promises and becomes resolved, when they all fullfilled with any results. But if all promises are rejected `some` also becomes rejected.
@@ -823,7 +839,7 @@ IO:
 					props.Results[i] = result
 					if (props.done == props.length) {
 						//return only successful results
-						resolveCollection(props.Results.filter(function () { return true }))
+						resolveCollection(props.Results.filter(function (itm, j) { return j in props.Results }))
 					}
 				},
 				itemRejected: function (i, err) {
@@ -835,17 +851,17 @@ IO:
 						//if all promise collection was rejected
 						rejectCollection(props.ErrorResults)
 					} else if (props.done == props.length) {
-						resolveCollection(props.Results)
+						//return only successful results
+						resolveCollection(props.Results.filter(function (itm, j) { return j in props.Results }))
 					}
 				},
-				itemProgress: noop
+				itemProgressed: undefined
 			}
 		})
 
+
 		//Determines if `value` is a Promise-like object
-		Promise.isPromise = function (value) {
-			return value && typeof value === 'object' && typeof value.then === 'function';
-		}
+		Promise.isPromise = isPromise
 
 		//expose `Promise` constructor and helpers
 		return Promise;
@@ -911,7 +927,6 @@ IO:
 		}
 	})
 
-
 	// Promise of window 'load'
 	Core.DOMLoaded = new Promise(
 		function (loaded, aborted) {
@@ -947,10 +962,18 @@ IO:
 		},
 		function () {
 			//cancel page loading
-			if (!!window.stop) window.stop()
-			else if (!!document.execCommand) document.execCommand('Stop')
+			if (!!window.stop) { window.stop() }
+			else if (!!document.execCommand) { document.execCommand('Stop') }
 		}
 	)
+
+	//Promise of included UI modules
+	Core.UIReady = Core.DOMReady.then(function () {
+		return Promise.any(Includes);
+	})
+	Core.UIReady.then(null, function () {//on cancel
+		Promise.all(Includes).cancel()
+	})
 
 	// document.readyState polyfill
 	if (document && !document.readyState) {
@@ -958,16 +981,6 @@ IO:
 		Core.DOMReady.then(function () { document.readyState = 'interactive' })
 		Core.DOMLoaded.then(function () { document.readyState = 'complete' })
 	}
-
-	//Promise of included UI modules
-	Core.UIReady = new Promise(function (loaded, error, progressed) {
-		Core.DOMReady.then(
-			function () {
-				Promise.any(Includes).then(loaded, error, progressed)
-			}, error, progressed
-		)
-	})
-
 
 	//Because of dinamic loader DOMReady and DOMLoaded need to be deferred while necessary resources will be ready
 	//Advanced DOMLoaded, that fulfills only when all (inclusive async) resources loaded
@@ -981,62 +994,73 @@ IO:
 				for (i in Resources.urls) {
 					Proms.push(Resources.urls[i].promise)
 				}
-				resourcesPromise = Promise.any(Proms).and(loadedPromise).then(loaded, aborted, progressed)
+				resourcesPromise = Promise.any(Proms)
+				resourcesPromise.and(loadedPromise).then(loaded, aborted, progressed)
 			})
-		}, function () {
+		}, function () {//on cancel
 			Core.DOMReady.cancel()
 			for (i in Resources.urls) {
 				Resources.urls[i].promise.cancel()
 			}
-			resourcesPromise && resourcesPromise.cancel()
 			loadedPromise.cancel()
 		})
 	}())
 
-
-	//Advanced DOMReady, that fulfills only when all sync or deferred resources loaded
-	Core.DOMReady.then(
-		function () {
-			var Proms = [], resource, i;
-			for (i in Resources.urls) {
-				resource = Resources.urls[i]
-				if (!resource.async) {
-					Proms.push(resource.promise)
-				}
-			}
-			return Promise.any(Proms);
-		},
-		function () {
-			//on cancel
-			var resource, i;
-			for (i in Resources.urls) {
-				resource = Resources.urls[i]
-				if (!resource.async) {
-					resource.promise.cancel()
-				}
+	//Advanced DOMReady, that fulfills only when all sync or deferred resources loaded.
+	Core.DOMReady = Core.DOMReady.then(function () {
+		var Proms = [], resource, i;
+		for (i in Resources.urls) {
+			resource = Resources.urls[i]
+			if (!resource.async) {
+				Proms.push(resource.promise)
 			}
 		}
-	)
+		return Promise.any(Proms);
+	})
+	Core.DOMReady.then(null, function () {//on cancel
+		var resource, i;
+		for (i in Resources.urls) {
+			resource = Resources.urls[i]
+			if (!resource.async) {
+				resource.promise.cancel()
+			}
+		}
+	})
 
 
 	//Modified Promise constructor for Loader
-	var LoadPromise = (function () {
+	var LoadPromise = (function() {
 		function LoadPromise(initFunc, cancelFunc) {
-			var promise = (this instanceof LoadPromise) ? new Promise(initFunc, cancelFunc) : Promise(initFunc, cancelFunc);
-			promise.load = LoadPromise.prototype.load
-			return promise;
+			if (this instanceof Promise) { //with `new` operator
+				Promise.call(this, initFunc, cancelFunc)
+			}
+			else { //as a function
+				return new LoadPromise(function(resolve) {
+					resolve(initFunc)
+				})
+			}
 		}
-		LoadPromise.prototype.load = function (src, options) {
-			return this.then(function () {
+		LoadPromise.prototype = Object.create(Promise.prototype)
+		LoadPromise.prototype.constructor = LoadPromise
+		LoadPromise.prototype.then = function(d, e, p) {
+			return LoadPromise(
+				Promise.prototype.then.call(this, d, e, p)
+			)
+		}
+		LoadPromise.prototype.load = function(src, options) {
+			return this.then(function() {
 				return Core.load(src, options)
 			})
 		}
 		return LoadPromise;
-	}())
+	}());
 
 
 
-								/* Loader 2.3 */
+
+
+
+								/* Loader 2.4 */
 
 	//help for dev http://pieisgood.org/test/script-link-events/ 
 	Core.load = function (src, options) {
@@ -1084,7 +1108,7 @@ IO:
 		if (!src) return LoadPromise(elem);
 
 		if (src instanceof Array) {
-			return LoadPromise(Promise.every(src.map(function (url) {
+			return LoadPromise(Promise.all(src.map(function (url) {
 				return Core.load(url, options)
 			})));
 		}
@@ -1172,7 +1196,7 @@ IO:
 					//BUGS:
 					// - 'onerror' callbacks not always preserve execution order
 					// - in Safari triggers 'onload' instead of 'onerror' for external resources
-					// - cancelation of loading (as Promise) does not cancel script loading, because of browsers behavior. File request still will be alive, but Promise will be rejected with canceled state. It may cause unnecessary delay in deferred sequence.
+					// - cancellation of loading (as Promise) does not cancel script loading, because of browsers behavior. File request still will be alive, but Promise will be rejected with canceled state. It may cause unnecessary delay in deferred sequence.
 					// - in IE 6-9 alert during loading may cause 'onerror'
 
 
@@ -1236,7 +1260,7 @@ IO:
 						document.head.appendChild(script)
 					}
 
-						//Async
+					//Async
 					else if (options.defer || options.async) {
 						//options.defer - Parallel loading. Scripts will be ready in order, that they are loaded, but executed in right order.
 						//options.async - Cancels `defer`. Parallel loading. Scripts will be executed in order, that they are loaded.
@@ -1478,7 +1502,9 @@ IO:
 							//fix absent 'onerror'
 							if (isOnerrorNotSupported) {
 								Core.URL.isAvailableAsync(elem.href).then(function (isAvail) {
-									if (!isAvail) elem.onerror && elem.onerror() //404, call errorback
+									if (!isAvail) {
+										elem.onerror && elem.onerror() //404, call errorback
+									}
 								})
 							}
 							//fix absent 'onload'
@@ -1580,7 +1606,7 @@ IO:
 					//BUGS: 
 					//	- if cache is anabled, in FF image is loaded successfully even if loading was canceled, because it was already in cache
 					//	- onabort works only in IE and only if image is inserted in DOM. If image is not in DOM in IE, it can't be aborted.
-					//	- in FF cancelation don't stop downloading of image
+					//	- in FF cancellation don't stop downloading of image
 
 					// Image loading can't be synchronous, by default it is asynchronous.
 
@@ -1664,21 +1690,24 @@ IO:
 							weight: options.weight,
 							style: options.style,
 							stretch: options.stretch,
-							unicodeRange: options.unicodeRange,
+							unicodeRange: options.unicodeRange || options['unicode-range'],
 							variant: options.variant,
-							featureSettings: options.featureSettings,
+							featureSettings: options.featureSettings || options['feature-settings'],
 							format: options.format,
 							local: options.local
 						},
-						done = function () {
+						face,
+						done = function (result) {
 							isLoaded = true
-							loaded.call(undefined, font)
+							loaded(result || font)
 						},
-						failed = function () {
+						failed = function (err) {
 							isCanceled = true
-							rejected.call(undefined, new Error('Unable to load ' + src))
+							rejected(err || new Error('Unable to load ' + src))
 						},
-						declaretion = '';
+						declaretion = '',
+						srcDeclarestion = '',
+						fileName = src.split(/\.[\w*]+$/)[0];
 
 					//correct format
 					switch (font.format) {
@@ -1702,21 +1731,58 @@ IO:
 						// Add to resource collection
 						Resources.add(src, options)
 					}
-
-					//create hidden element to check font changes
-					var shadowElem = document.createElement('span'),
-						fileName = src.split(/\.[\w*]+$/)[0];
 						
-					shadowElem.innerHTML = 'qwertyuiopasdfghjklzxcvbnm1234567890 \uf087'
-					
-					//append test element to DOM
-					document.body.insertBefore(shadowElem, document.body.firstChild)
-					
 					//defaults
 					font.family = font.family || fileName.split('/').pop().split(/[\?#]/)[0]
 					font.local = font.local || [font.family]
 
+					srcDeclarestion = font.local.map(function(family) { return 'local("' + family + '")' }).join(', ') +
+						((font.format == '*') ?
+							(
+								',\n\turl("' + (options.cache ? fileName + '.woff' : Core.URL.randomize(fileName + '.woff')) + '") format("woff")' +
+								',\n\turl("' + (options.cache ? fileName + '.ttf' : Core.URL.randomize(fileName + '.ttf')) + '") format("truetype")' +
+								',\n\turl("' + (options.cache ? fileName + '.otf' : Core.URL.randomize(fileName + '.otf')) + '") format("opentype")'
+							)
+							: (
+								',\n\turl("' + (options.cache ? src : Core.URL.randomize(src)) + '") format("' + font.format + '")'
+							));
 
+					//W3C latest implementation
+					if (global.FontFace && document.fonts && !FontFace.prototype.ready) {
+						face = new FontFace(font.family, srcDeclarestion, options)
+						//defaults
+						font.weight = face.weight
+						font.style = face.style
+						font.stretch = face.stretch
+						font.unicodeRange = face.unicodeRange
+						font.variant = face.variant
+						font.featureSettings = face.featureSettings
+						face.load().then(function() {
+							if (options.defer && !options.async) {
+								Resources.ready(src)
+							} else {
+								done() //callback
+							}
+						}, function(err) {
+							failed(err) //errorback
+							if (options.defer && !options.async) {
+								Resources.notReady(src) //404
+							}
+						}, progress)
+						document.fonts.add(face)
+						return; //EXIT
+					}
+
+					//ELSE FALLBACK IMPLEMENTATION
+
+					//create hidden element to check font changes
+					var shadowElem = document.createElement('span');
+
+					shadowElem.innerHTML = 'qwertyuiopasdfghjklzxcvbnm1234567890 \uf087'
+
+					//append test element to DOM
+					document.body.insertBefore(shadowElem, document.body.firstChild)
+										
 					declaretion =
 						'@font-face{\n' +
 							(font.weight ? '\tfont-weight: ' + font.weight + ';\n' : '') +
@@ -1730,17 +1796,7 @@ IO:
 							((font.format == 'embedded-opentype' || font.format == '*') ?
 								'\tsrc: url("' + (options.cache ? fileName + '.eot' : Core.URL.randomize(fileName + '.eot')) + '");\n' : '') +
 
-							'\tsrc: ' + font.local.map(function (family) { return 'local("' + family + '")' }).join(', ') +
-
-							((font.format == '*') ?
-								(
-									',\n\turl("' + (options.cache ? fileName + '.woff' : Core.URL.randomize(fileName + '.woff')) + '") format("woff")' +
-									',\n\turl("' + (options.cache ? fileName + '.ttf' : Core.URL.randomize(fileName + '.ttf')) + '") format("truetype")' +
-									',\n\turl("' + (options.cache ? fileName + '.otf' : Core.URL.randomize(fileName + '.otf')) + '") format("opentype")'
-								)
-								: (
-									',\n\turl("' + (options.cache ? src : Core.URL.randomize(src)) + '") format("' + font.format + '")'
-								)) +
+							'\tsrc: ' + srcDeclarestion +
 						';\n}';
 
 					//defaults
@@ -2138,7 +2194,8 @@ IO:
 					}
 
 					//Async or defer or sync
-					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](options.cache ? src : Core.URL.randomize(src)).then(
+					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](options.cache ? src : Core.URL.randomize(src))
+					elem.then(
 						function (result) {
 							try {
 								textContent = Core.JSON.parse(result)
@@ -2192,7 +2249,8 @@ IO:
 						loaded.apply(null, arguments)//callback
 					}
 					options.type = 'script'
-					elem = Core.load(src, options).then(null, function (err) {
+					elem = Core.load(src, options)
+					elem.then(null, function (err) {
 						window[callbackName] = undefined
 						isCanceled = true
 						failed(err) //errback
@@ -2231,7 +2289,8 @@ IO:
 					}
 
 					//Async or defer or sync
-					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](options.cache ? src : Core.URL.randomize(src)).then(
+					elem = Util[(options.defer || options.async) ? 'requestAsync' : 'requestSync'](options.cache ? src : Core.URL.randomize(src))
+					elem.then(
 						function (result) {
 							try {
 								//process variables in text if resorce defined as a text file
@@ -2278,17 +2337,19 @@ IO:
 	}
 
 
+	
 
 
-
-	/* Module constructor */
+							/* Module constructor */
 
 	Module = function (moduleName, moduleBody) {
-		this.body = moduleBody
+		this.body = moduleBody || {}
 		this.style = null //switchable styles - style/link object
 		this.name = moduleName
 		this.url = '.'
 		this.initiated = false
+		this.listeners = moduleBody.listen || {}
+		this.runtimeListeners = {}
 		this.promise = Promise() //empty resolved Promise
 		this.sandbox = undefined //will be changed in future
 	}
@@ -2310,7 +2371,7 @@ IO:
 					//remove styles back 
 					module.style && document.head.removeChild(module.style)
 					module.style = null
-					module.promise = new Promise().cancel().then(null, function () { return err }) //return rejected promise
+					module.promise = Promise((err instanceof Error) ? err : new Error(err)) //return rejected promise
 				}
 			}
 			else {
@@ -2330,15 +2391,15 @@ IO:
 				try {
 					module.promise = Promise(module.body.destroy()) // end module life and save last Promise
 					module.initiated = false //switch initiated status
-					module.body.runtime_listen && (module.body.runtime_listen = undefined) //remove runtime listeners
+					module.runtimeListeners = {} //remove runtime listeners
 				} catch (err) {
-					module.promise = new Promise().cancel().then(null, function () { return err }) //return rejected promise
+					module.promise = Promise((err instanceof Error) ? err : new Error(err)) //return rejected promise
 				}
 			}
 			else {
 				module.promise = Promise() // end module life and save last Promise
 				module.initiated = false //switch initiated status
-				module.body.runtime_listen && (module.body.runtime_listen = undefined) //remove runtime listeners
+				module.runtimeListeners = {} //remove runtime listeners
 			}
 		}
 
@@ -2354,7 +2415,7 @@ IO:
 
 
 
-	/* Sandbox constructor */
+							/* Sandbox constructor */
 	//Creates new sandbox instance
 	Sandbox = function (moduleName) {
 		this.template = Templater(this)//pass new sandbox as a context
@@ -2383,10 +2444,9 @@ IO:
 	//alternative way to add listener of core events. These events are removed on every stopping of Module, so they may be used in init()
 	Sandbox.prototype.listen = function (eventType, handler) {
 		if (eventType && handler && this.moduleName && ModulesRegistry[this.moduleName]) {
-			ModulesRegistry[this.moduleName].runtime_listen || (ModulesRegistry[this.moduleName].runtime_listen = {})
-			var listener = ModulesRegistry[this.moduleName].runtime_listen[eventType] || [];
-			listener = (listener instanceof Array) ? listener.concat(handler) : [listener].concat(handler)
-			ModulesRegistry[this.moduleName].runtime_listen[eventType] = listener
+			var listener = ModulesRegistry[this.moduleName].runtimeListeners[eventType] || [];
+			listener.push(handler)
+			ModulesRegistry[this.moduleName].runtimeListeners[eventType] = listener
 		}
 		return this;  // return Sandbox object
 	}
@@ -2800,11 +2860,11 @@ IO:
 			})
 		} else {
 			//insert text in crossbrowser way
-			if ('text' in scriptElem) { //ie8-
-				scriptElem.text = jsText
-			}
-			else if ('textContent' in scriptElem) {//normal
+			if ('textContent' in scriptElem) {//normal
 				scriptElem.textContent = jsText
+			}
+			else if ('text' in scriptElem) { //ie8-
+				scriptElem.text = jsText
 			}
 			else {//fallback
 				scriptElem.innerHTML = jsText
@@ -2978,6 +3038,27 @@ IO:
 
 
 
+
+	var CoreEvent = function(origin) {
+		this.emitter
+		this.isCanceled = false
+		this.type = origin.type || '*'
+		this.timeStamp = origin.timeStamp || new Date().getTime()
+		this.detail = origin.detail || origin.data
+		this.detail = (this.detail && typeof this.detail === 'object') ? this.detail : {}
+	}
+
+	var CoreAction = CoreEvent;
+
+	CoreEvent.prototype.cancel = CoreAction.prototype.cancel = function () {
+		this.isCanceled = true
+	}
+
+
+
+
+
+
 	//App configuration.
 	Core.config = {
 		//Default home URL
@@ -2988,104 +3069,124 @@ IO:
 	}
 
 	// Send global events
-	Core.invoke = function (eventType, detail) {
-		if (eventType) {
-			detail = (detail && typeof detail === 'object') ? detail : {}
+	Core.invoke = function(eventType, detail) {
+		var event = new CoreEvent({
+			type: eventType,
+			detail: detail,
+			emitter: 'Core'
+		})
 
-			//async
-			setAsyncTask(function () {
-				var i, n, handler;
+		eventType = event.type
+		detail = event.detail
+		
+		//async
+		setAsyncTask(function () {
+			var i, n, handler;
 
-				//find handlers in Core listeners collection
-				if (eventType in Events) {
-					n = 0;
-					while (handler = Events[eventType][n++]) {
-						handler(detail)
-					}
+			//any event handlers
+			if (eventType !== '*' && '*' in Events) {
+				n = 0
+				while (handler = Events['*'][n++]) {
+					handler(detail, event)
 				}
+			}
 
-				for (i in ModulesRegistry) {
-					//find handlers in module 'listen' collection
+			//find handlers in Core listeners collection
+			if (eventType in Events) {
+				n = 0;
+				while (handler = Events[eventType][n++]) {
+					handler(detail, event)
+				}
+			}
+
+			for (i in ModulesRegistry) {
+				//find handlers in module 'listen' collection
+				if (
+					ModulesRegistry[i]
+					&& ModulesRegistry[i].initiated
+				) {
+
 					if (
-						ModulesRegistry[i]
-						&& ModulesRegistry[i].initiated
-						&& 'listen' in ModulesRegistry[i].body
-						&& eventType in ModulesRegistry[i].body.listen
+						eventType in ModulesRegistry[i].listeners
 					) {
 						//single function
-						if (typeof ModulesRegistry[i].body.listen[eventType] === 'function') {
+						if (typeof ModulesRegistry[i].listeners[eventType] === 'function') {
 							try {//catch errors without stopping app execution
-								ModulesRegistry[i].body.listen[eventType](detail)
+								ModulesRegistry[i].listeners[eventType](detail)
 							} catch (err) {
 								console.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + ':' + err.line + ']' + ' ' + errorAsString(err))
 							}
 						}
 							//array of functions
-						else if (ModulesRegistry[i].body.listen[eventType].length) {
+						else if (ModulesRegistry[i].listeners[eventType].length) {
 							n = 0;
-							while (handler = ModulesRegistry[i].body.listen[eventType][n++]) {
-								try {//catch errors without stopping app execution
-									handler(detail)
-								} catch (err) {
-									console.error('[Module: ' + ModulesRegistry[i].name + ':listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']' + ' ' + errorAsString(err))
-								}
+							while (handler = ModulesRegistry[i].listeners[eventType][n++]) {
+								handler(detail, event)
 							}
 
 						}
 					}
 
-					//find handlers in module 'runtime_listen' collection
+					//find handlers in module 'runtimeListeners' collection
 					if (
-						ModulesRegistry[i]
-						&& ModulesRegistry[i].initiated
-						&& ModulesRegistry[i].body['runtime_listen']
-						&& eventType in ModulesRegistry[i].body.runtime_listen
+						eventType in ModulesRegistry[i].runtimeListeners
 					) {
 						n = 0;
-						while (handler = ModulesRegistry[i].body.runtime_listen[eventType][n++]) {
-							try {//catch errors without stopping app execution
-								handler(detail)
-							} catch (err) {
-								console.error('[Module: ' + ModulesRegistry[i].name + ':runtime_listen.' + eventType + '.handler(' + (n - 1) + '):' + err.line + ']' + ' ' + errorAsString(err))
-							}
+						while (handler = ModulesRegistry[i].runtimeListeners[eventType][n++]) {
+							handler(detail, event)
 						}
 					}
 
 				}
-			})
-		}
+
+				
+
+
+			}
+		})
+		
 		return this; // return Core object
 	}
 
-	// Adds Core event listeners in runtime. This is an alternative way to add listener of Core events.
+	// Adds Core event listeners in runtime.
 	Core.listen = function (eventType, handler) {
 		var listener;
 		if (eventType && handler) {
-			listener = Events[eventType] || [];
-			listener = (listener instanceof Array) ? listener.concat(handler) : [listener].concat(handler)
+			listener = Events[eventType] || []
+			listener.push(handler)
 			Events[eventType] = listener
 		}
 		return this;  // return Core object
 	}
 	// Generates action in Core with attached details
-	Core.action = function (actionType, detail) {
-		if (actionType) {
-			detail = (detail && typeof detail === 'object') ? detail : {}
-			//async
-			setAsyncTask(function () {
-				var i = 0, handler;
-				if (actionType in Actions) {
-					while (handler = Actions[actionType][i++]) {
-						handler(detail, {
-							type: actionType,
-							targetName: 'Core',
-							timeStamp: (new Date()).getTime(),
-							detail: detail
-						})
-					}
+	Core.action = function(actionType, detail) {
+		var action = new CoreAction({
+			type: actionType,
+			detail: detail,
+			emitter: 'Core'
+		})
+
+		actionType = action.type
+		detail = action.detail
+
+		//async
+		setAsyncTask(function () {
+			var i, handler;
+			//any action handlers
+			if (actionType !== '*' && '*' in Actions) {
+				i = 0
+				while (handler = Actions['*'][i++]) {
+					handler(detail, action)
 				}
-			})
-		}
+			}
+			if (actionType in Actions) {
+				i = 0
+				while (handler = Actions[actionType][i++]) {
+					handler(detail, action)
+				}
+			}
+		})
+		
 		return this; // return Core object
 	}
 
@@ -3167,36 +3268,40 @@ IO:
 	Core.include = function (path) {
 		if (!path) return;
 		path = Core.URL.normalize(path)
-		var Proms = [];
+		var Proms = [],
+			resProm;
 
 		//css
 		Proms.push(Core.load(path + '/style.css', 'defer'))
 		//always for IE <=8
 		isOldIE && Proms.push(Core.load(path + '/ie.css', 'defer'))
 
-
 		//html
 		//setup unknown type to prevent variables parsing by default
 		if (Core.URL.isAvailable(path + '/index.html')) {
-			Proms.push(Core.load(path + '/index.html', { type: 'unknown' }).then(function (text) {
+			resProm = Core.load(path + '/index.html', { type: 'unknown' })
+			resProm.then(function(text) {
 				text = Templater({ moduleUrl: path })(text)
 				Util.injectHTML(text)
 				return text;
-			}))
+			})
+			Proms.push(resProm)
 		}
 
 		//js
-		Proms.push(Core.load(path + '/register.js', 'defer reload cache').then(function () {
+		resProm = Core.load(path + '/register.js', 'defer reload cache')
+		resProm.then(function() {
 			if (!lastRegisteredModuleName) return;
 			var module = ModulesRegistry[lastRegisteredModuleName]
 			module.url = module.sandbox.moduleUrl = path
 			lastRegisteredModuleName = undefined
-		}))
+		})
+		Proms.push(resProm)
 
 		//add to Includes collection
 		Includes = Includes.concat(Proms)
 		//return Promise collection
-		return Promise.any(Proms);
+		return Promise.some(Proms);
 	}
 
 	Core.register = function (moduleName, moduleBody) {
@@ -3234,16 +3339,17 @@ IO:
 
 		while (moduleName = arguments[i++]) {
 			module = ModulesRegistry[moduleName]
-			if (!module) { continue; }//ignore unexisting modules
-			Proms.push(module.start().then(null, function (err) {
+			if (!module) {
+				continue; //ignore unexisting modules
+			}
+			module.start().then(null, function(err) {
 				console.error('[Module: ' + module.name + ':init:' + err.line + ']' + ' ' + errorAsString(err))
-			}))
+			})
+			Proms.push(module.promise)
 		}
-
-		return Promise.some(Proms).then(
-			(length > 1) ? null : function (results) { return Promise(results[0]) },
-			(length > 1) ? null : function (errors) { return errors[0] }
-		);
+		
+		//dependently of arguments return collection Promise or single Promise
+		return (length > 1) ? Promise.some(Proms) : (Proms[0] || new Promise());
 	}
 
 	Core.stop = function (/*args*/) {
@@ -3255,27 +3361,32 @@ IO:
 
 		while (moduleName = arguments[i++]) {
 			module = ModulesRegistry[moduleName]
-			if (!module) { continue; }//ignore unexisting modules
-			Proms.push(module.stop().then(null, function (err) {
+			if (!module) {
+				continue; //ignore unexisting modules
+			}
+			module.stop().then(null, function(err) {
 				console.error('[Module: ' + module.name + ':destroy:' + err.line + ']' + ' ' + errorAsString(err))
-			}))
+			})
+			Proms.push(module.promise)
 		}
 
-		return Promise.some(Proms).then(
-			(length > 1) ? null : function (results) { return Promise(results[0]) },
-			(length > 1) ? null : function (errors) { return errors[0] }
-		);
+		//dependently of arguments return collection Promise or single Promise
+		return (length > 1) ? Promise.some(Proms) : (Proms[0] || new Promise());
 	}
 
 	Core.startAll = function () {
 		var moduleName, Proms = [];
-		for (moduleName in ModulesRegistry) { Proms.push(Core.start(moduleName)) }
+		for (moduleName in ModulesRegistry) {
+			Proms.push(Core.start(moduleName))
+		}
 		return Promise.any(Proms);
 	}
 
 	Core.stopAll = function () {
 		var moduleName, Proms = [];
-		for (moduleName in ModulesRegistry) { Proms.push(Core.stop(moduleName)) }
+		for (moduleName in ModulesRegistry) {
+			Proms.push(Core.stop(moduleName))
+		}
 		return Promise.any(Proms);
 	}
 
