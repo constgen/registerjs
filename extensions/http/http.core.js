@@ -36,6 +36,7 @@ Core.extend(function(Core){
 	'use strict';
 	
 	var Cache = {}, // some kind of cache
+		Promise = Core.Promise,
 		httpRequest,
 		undefined;
 
@@ -53,7 +54,7 @@ Core.extend(function(Core){
 		}
 
 		// options.url - Required
-		if (!options.url) return
+		if (!options.url) return Promise();
 		
 		options.url = Core.template(options.url)  //process url variables
 		options.url = Core.URL.normalize(options.url)
@@ -98,10 +99,10 @@ Core.extend(function(Core){
 			responseFromCache = Cache.getResponse(options)
 			//if in Cache, return resolved promise with value from Cache
 			if (responseFromCache)
-				return Core.Promise(responseFromCache)
+				return Promise(responseFromCache);
 		}
 
-		promise = new Core.Promise(
+		promise = new Promise(
 			function (callback, errorback, progressback) {
 				xhr = new Core.Util.XHR
 				try {
@@ -190,7 +191,7 @@ Core.extend(function(Core){
 		}
 
 		//return Promise
-		return promise
+		return promise;
 	}
 
 	//function to prepare response data
@@ -305,27 +306,50 @@ Core.extend(function(Core){
 		}
 	}
 
-	//extends promise fo enhanced chaining
-	function extendHttpPromise(promise) {
-		promise.http = function (url, options) {
-			return promise.then(function () {
+
+
+	//Modified Promise constructor for HTTP requests
+	var HttpPromise = (function() {
+		function HttpPromise(initFunc, cancelFunc) {
+			if (this instanceof Promise) { //with `new` operator
+				Promise.call(this, initFunc, cancelFunc)
+			}
+			else { //as a function
+				return new HttpPromise(function(resolve) {
+					resolve(initFunc)
+				})
+			}
+		}
+		HttpPromise.prototype = Object.create(Promise.prototype)
+		HttpPromise.prototype.constructor = HttpPromise
+		HttpPromise.prototype.then = function(d, e, p) {
+			return HttpPromise(
+				Promise.prototype.then.call(this, d, e, p)
+			)
+		}
+		HttpPromise.prototype.http = function(url, options) {
+			return this.then(function() {
 				return httpRequest(url, options)
 			})
 		}
-		promise.httpCache = function (url, options) {
-			return promise.then(function () {
+		HttpPromise.prototype.httpCache = function(url, options) {
+			return this.then(function() {
 				return httpRequest(url, options, true)
 			})
 		}
-		return promise
-	}
+		return HttpPromise;
+	}());
 
 	return {
-		http: function (url, options) {
-			return extendHttpPromise(httpRequest(url, options))
+		http: function(url, options) {
+			return new HttpPromise(function(d, e, p) {
+				httpRequest(url, options).then(d, e, p)
+			});
 		},
-		httpCache: function (url, options) {
-			return extendHttpPromise(httpRequest(url, options, true))
+		httpCache: function(url, options) {
+			return new HttpPromise(function(d, e, p) {
+				httpRequest(url, options, true).then(d, e, p)
+			});
 		}
 	}
 
