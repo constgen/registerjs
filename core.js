@@ -1,5 +1,5 @@
 ﻿/*
-Version 3.5.1
+Version 3.5.2
 Compatible with: NodeJS, AMD, WinRT.
 
 IO:
@@ -20,7 +20,7 @@ IO:
 		location = window.location,
 
 		/*internal*/
-		Core = { version: '3.5.1' }, // Application Core
+		Core = { version: '3.5.2' }, // Application Core
 		ModulesRegistry = {}, // Registered Modules collection
 		Sandbox, // Modules Sandbox constructor
 		Module, // Module object constructor
@@ -1076,7 +1076,7 @@ IO:
 			}
 		}
 
-		var n,
+		var format,
 			elem,
 			loadPromise,
 			isLoaded = false,
@@ -1125,47 +1125,49 @@ IO:
 		if (!options.reload && (src in Resources.urls)) {
 			return Resources.urls[src].promise;
 		}
+		
+		//define format of resource
+		if (!options.format) {
+			format = src.split(/[\?#]/)[0].split('/').pop().split('.')
+			options.format = (format.length == 1) ? undefined : format.pop()
+		}
 
-		n = src.split('?')[0].lastIndexOf('.')
-		if (n == -1 && !options.type) {
+		if (!options.format && !options.type) {
 			return LoadPromise();
 		}
 
-		//define format of resource
-		options.format || (options.format = (n == -1) ? undefined : src.split('?')[0].substr(n + 1))
-		
 		//define type of resource
 		if (!options.type) {
 			switch (options.format) {
 				//JavaScript files
 				case 'js': options.type = 'script'; break
-					//CSS files
+				//CSS files
 				case 'css': options.type = 'style'; break
-					//images
+				//images
 				case 'jpg': case 'jpeg':
 				case 'gif': case 'png':
 				case 'svg': case 'webp':
 				case 'bmp': options.type = 'image'; break
-					//fonts
-				case 'eot': case 'woff':
+				//fonts
+				case 'eot': case 'woff': case 'woff2':
 				case 'ttf':	case 'otf':
 				case 'truetype': case 'opentype':
 				case 'embedded-opentype': options.type = 'font'; break
-					//audio
+				//audio
 				case 'mp3': case 'ogg':
 				case 'wav': case 'aac':
 				case 'm4a': options.type = 'audio'; break
-					//video
+				//video
 				case 'mp4': case 'ogv':
 				case 'webm': case 'ogv':
 				case 'avi': case 'mov':
 				case 'm4v': options.type = 'video'; break
-					//json files
+				//json files
 				case 'json': options.type = 'json'; break
-					//text files
+				//text files
 				case 'html': case 'htm':
 				case 'txt': case 'tpl': options.type = 'text'; break
-					//default undefined type of resource
+				//default undefined type of resource
 				default: options.type = undefined
 			}
 		}
@@ -1739,14 +1741,16 @@ IO:
 					srcDeclarestion = font.local.map(function(family) { return 'local("' + family + '")' }).join(', ') +
 						((font.format == '*') ?
 							(
+								',\n\turl("' + (options.cache ? fileName + '.woff2' : Core.URL.randomize(fileName + '.woff2')) + '") format("woff2")' +
 								',\n\turl("' + (options.cache ? fileName + '.woff' : Core.URL.randomize(fileName + '.woff')) + '") format("woff")' +
 								',\n\turl("' + (options.cache ? fileName + '.ttf' : Core.URL.randomize(fileName + '.ttf')) + '") format("truetype")' +
-								',\n\turl("' + (options.cache ? fileName + '.otf' : Core.URL.randomize(fileName + '.otf')) + '") format("opentype")'
+								',\n\turl("' + (options.cache ? fileName + '.otf' : Core.URL.randomize(fileName + '.otf')) + '") format("opentype")' + 
+								',\n\turl("' + (options.cache ? fileName + '.svg' : Core.URL.randomize(fileName + '.svg')) + '") format("svg")'
 							)
 							: (
 								',\n\turl("' + (options.cache ? src : Core.URL.randomize(src)) + '") format("' + font.format + '")'
 							));
-
+					
 					//W3C latest implementation
 					if (global.FontFace && document.fonts && !FontFace.prototype.ready) {
 						face = new FontFace(font.family, srcDeclarestion, options)
@@ -1813,24 +1817,24 @@ IO:
 						var callback,
 							initialWidth,
 							initialHeight,
-							styleText = '\
-								font-family: serif;\
-								font-size: 16px;\
-								line-height: normal;\
-								width: auto;\
-								height: auto;\
-								white-space: nowrap;\
-								font-weight:' + font.weight + ';\
-								font-style:' + font.style + ';\
-								font-stretch:' + font.stretch + ';\
-								font-variant:' + font.variant + ';\
-								font-feature-settings:' + font.featureSettings + ';\
-								display: inline-block;\
-								position: absolute;\
-								overflow: hidden;\
-								top: -1000px;\
-								' + ('ltr' ? 'left' : 'right') + ': -10000em\
-							';
+							styleText = [
+								'font-family: serif',
+								'font-size: 16px',
+								'line-height: normal',
+								'width: auto',
+								'height: auto',
+								'white-space: nowrap',
+								'font-weight:' + font.weight,
+								'font-style:' + font.style,
+								'font-stretch:' + font.stretch,
+								'font-variant:' + font.variant,
+								'font-feature-settings:' + font.featureSettings,
+								'display: inline-block',
+								'position: absolute',
+								'overflow: hidden',
+								'top: -1000px',
+								('ltr' ? 'left' : 'right') + ': -10000em'
+							].join(';');
 						
 						shadowElem.style.cssText = styleText
 						shadowElem.setAttribute('style', styleText)
@@ -1848,13 +1852,14 @@ IO:
 						else if (!window.opera) {
 							var tempHtml = shadowElem.innerHTML;
 
-							shadowElem.innerHTML =
-								'<div class="shadowElemContent" style="position:relative; display:inline-block">\
-								<div class="shadowElemInnerWrapper" style="position:absolute; width:100%; height:100%; overflow:hidden;">\
-									<div class="shadowElemInnerContent"></div>\
-								</div>\
-								' + tempHtml + ' \
-							</div>'
+							shadowElem.innerHTML = [
+								'<div class="shadowElemContent" style="position:relative; display:inline-block">',
+									'<div class="shadowElemInnerWrapper" style="position:absolute; width:100%; height:100%; overflow:hidden;">',
+										'<div class="shadowElemInnerContent"></div>',
+									'</div>',
+									 tempHtml,
+								'</div>'
+							].join('\n')
 
 							var content = shadowElem.querySelector('.shadowElemContent'),
 								innerWrapper = shadowElem.querySelector('.shadowElemInnerWrapper'),
@@ -1909,10 +1914,12 @@ IO:
 						//async Promise
 						Promise.some(
 							font.format == '*' ? [
+								Core.URL.isAvailableAsync(fileName + '.woff2'),
 								Core.URL.isAvailableAsync(fileName + '.woff'),
 								Core.URL.isAvailableAsync(fileName + '.ttf'),
 								Core.URL.isAvailableAsync(fileName + '.otf'),
-								Core.URL.isAvailableAsync(fileName + '.eot')
+								Core.URL.isAvailableAsync(fileName + '.eot'),
+								Core.URL.isAvailableAsync(fileName + '.svg')
 							] : [
 								Core.URL.isAvailableAsync(src)
 							]
@@ -1922,10 +1929,12 @@ IO:
 						//sync Promise
 						: Promise(
 							font.format == '*' ? (
-								Core.URL.isAvailable(fileName + '.woff')
+								Core.URL.isAvailable(fileName + '.woff2')
+								|| Core.URL.isAvailable(fileName + '.woff')
 								|| Core.URL.isAvailable(fileName + '.ttf')
 								|| Core.URL.isAvailable(fileName + '.otf')
 								|| Core.URL.isAvailable(fileName + '.eot')
+								|| Core.URL.isAvailable(fileName + '.svg')
 								|| new Error()
 							) : (
 								Core.URL.isAvailable(src)
@@ -2902,9 +2911,11 @@ IO:
 	//Adds a parameter with random value, if not exists
 	Core.URL.randomize = function (url) { //returns URL
 		if (!/(\?|\&)rand=/.test(url)) {
-			return url + (url.indexOf('?') === -1 ? '?' : '&') + 'rand=' + (Math.random() * Math.pow(10, 7)).toFixed(0)
+			url = url.split('#')
+			url[0] = url[0] + (url[0].indexOf('?') === -1 ? '?' : '&') + 'rand=' + (Math.random() * Math.pow(10, 7)).toFixed(0)
+			return url.join('#');
 		}
-		return url
+		return url;
 	}
 
 	//Checks if URL is not in the same domain
